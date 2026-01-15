@@ -1,0 +1,71 @@
+.logo-cell img {
+  width: 36px !important;
+  height: 36px !important;
+  object-fit: contain;
+  display: block;
+}
+
+/* Allow text wrapping in specific ag-grid cells */
+.wrap-text {
+  white-space: normal !important;
+  line-height: 1.05;
+}
+
+/* Tighter vertical spacing for wrapped ag-grid cells */
+.ag-cell.wrap-text {
+  line-height: 1.05 !important;
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+
+/* Yellow highlight styling for search matches */
+mark {
+  background: #ffeb3b;
+  color: inherit;
+  padding: 0 1px;
+  border-radius: 2px;
+}
+
+/* Make inline code look like a yellow highlight (for grid markdown renderer) */
+.ag-theme-alpine .ag-cell code,
+.ag-theme-alpine .ag-cell-inline-editing code,
+.ag-cell code {
+  background: #ffeb3b !important;
+  color: inherit !important;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+
+/* Improve long option rendering in Dash Dropdowns */
+.long-option-dd .Select-menu-outer {
+  z-index: 2000; /* ensure it overlays other panes */
+}
+.long-option-dd .Select-option,
+.long-option-dd .VirtualizedSelectOption {
+  white-space: normal !important; /* allow wrapping */
+  line-height: 1.2 !important;
+}
+.long-option-dd .Select-value-label {
+  white-space: normal !important;
+}
+
+/* Resizable panel handle visibility */
+.resize-handle {
+  width: 8px !important;
+  min-width: 8px !important;
+  background: #d1d5db; /* gray-300 */
+  cursor: col-resize;
+  z-index: 3000; /* above charts/grid */
+}
+
+/* Slightly smaller font in left (sidebar) and right (details) panes */
+#sidebar {
+  font-size: 0.95rem;
+  line-height: 1.25;
+}
+#details {
+  font-size: 0.95rem;
+  line-height: 1.25;
+}
+
