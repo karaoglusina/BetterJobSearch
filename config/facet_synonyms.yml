@@ -1,0 +1,13 @@
+Domain/Sector:
+  finance: [banking, retail banking, fintech]
+  gov/public: [public sector, government, municipality]
+Language Requirement:
+  dutch_required: ["dutch required", "fluent dutch", "native dutch", "verplicht nederlands"]
+  dutch_optional: ["dutch is a plus", "preferred dutch", "pre"]
+  english_only: ["english only", "english working language"]
+Remote Policy:
+  remote: ["remote", "work from home"]
+  hybrid: ["hybrid"]
+  on‑site: ["on-site", "onsite", "on site"]
+
+

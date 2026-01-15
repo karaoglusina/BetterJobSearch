@@ -1,0 +1,31 @@
+facets:
+  - name: Domain/Sector
+    types: [industrial_design, architectural_design, construction, health, finance, gov/public, retail/e-com, logistics/supply, energy, education, gaming/media, generic/unknown, airport_operations, architecture_domain, automation_sector, business_analyst, business_processes, cyber_security, data_engineering, enterprise_applications, telecom, insurance, manufacturing, pharma_biotech, legal, marketing_advertising, mobility_transport, real_estate_proptech, urban_planning, consulting, research_lab, startup_scaleup, hospitality_service, restaurants_food, music, entertainment, events, lighting, audio_visual, culture_arts, sports, wellness, travel_tourism, facility_management, property_management, HR]
+  - name: Role Family
+    types: [business_analyst, data_analyst, product_ops, solutions_consultant, product_owner, consultant, automation_management, business_analysis, business_intelligence, business_it_liaison, data_analysis, data_architecture, data_science, hr_applications, ai_consulting, ai_product_management, product_management, solutions_architecture, data_engineering, ml_engineering, nlp_specialist, analytics_engineering, research_science, innovation_management, design_technology]
+  - name: Job Responsibilities
+    types: [requirements_elicitation, customer_support, process_mapping, backlog_management, roadmapping, prototyping_poc, data_pipeline_design, model_development, rag_implementation, dashboarding_reporting, documentation, training_enablement, vendor_management, change_management, data_visualisation, UI/UX design, sales, unknown]
+  - name: Seniority
+    types: [junior, mid, senior, lead, 3_years, 4_years, 5_years, 6_years, 8_years, 10_years, unknown]
+  - name: Language Requirement
+    types: [dutch_required, dutch_optional, english_only, multilingual, unknown]
+  - name: Remote Policy
+    types: [remote, hybrid, on-site, remote_first, office_first, unknown]
+  - name: Tools/Stack
+    types: [jira, sql, tableau, power_bi, python, sap, salesforce, unknown, data_tools, erp_systems, pandas, scikit_learn, pytorch, tensorflow, hugging_face, openai_api, langchain, llamaindex, weaviate, pinecone, faiss, qdrant, elasticsearch, opensearch, airflow, dbt, snowflake, bigquery, databricks, aws, azure, gcp, docker, kubernetes, git, mlflow, mendix, power_apps]
+  - name: AI Focus
+    types: [nlp, computer_vision, generative_ai, agents, rag, recommender_systems, forecasting, text, tabular, time_series, images, audio, multimodal, unknown]
+  - name: Company Culture & Values
+    types: [mission_driven, customer_centric, data_driven, design_led, engineering_led, quality_craftsmanship, fast_iteration, process_heavy, autonomy_ownership, mentorship_coaching, learning_culture, work_life_balance, async_collaboration, transparency_open, flat_hierarchy, hierarchical, risk_tolerant, regulated_environment, sustainability_green, diversity_inclusion, privacy_first, open_source, unknown]
+  - name: Stakeholders
+    types: [engineering, product, finance, operations, external_clients, users, unknown, business_collaboration, business_engagement, sales, marketing, legal, hr, executive, it, data_team, customers, partners, vendors]
+  - name: Hiring Constraints
+    types: [visa_required, security_clearance, eu_only, sponsorship_available, no_sponsorship, background_check, onsite_min_days, travel_required, unknown]
+  - name: Methodology/Frameworks
+    types: [agile, scrum, kanban, safe, waterfall, itil, lean, six_sigma, design_thinking, unknown]
+  - name: Company Size
+    types: [micro_1_10, small_11_50, mid_51_250, large_251_1000, enterprise_1000_plus, unknown]
+  - name: Degree Requirement
+    types: [none, bachelor, master, phd_preferred, phd_required, unknown]
+  - name: Personality & Soft Skills
+    types: [analytical_thinker, problem_solving, teamwork, stakeholder_influence, cross_functional_collaboration, user_empathy, customer_centric, business_acumen, strategic_mindset, ownership_bias_to_action, self_starter, adaptability_ambiguity, learning_mindset, detail_oriented, big_picture_thinking, prioritization_time_management, resilience, data_driven, design_thinking, creative_thinking, travel_willingness, driver, unknown]

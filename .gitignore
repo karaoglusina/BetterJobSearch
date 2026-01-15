@@ -1,0 +1,112 @@
+# ===================
+# Secrets & Environment
+# ===================
+.env
+*.env
+SinaJobs.env
+
+# ===================
+# Python
+# ===================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+*_env/
+sinajobs_env/
+
+# ===================
+# Artifacts (user-generated)
+# ===================
+artifacts/*.index
+artifacts/*.pkl
+artifacts/*.jsonl
+
+# ===================
+# User Data
+# ===================
+data/offline_*.json*
+data/*.parquet
+data/job_group_embeddings.parquet
+
+# ===================
+# IDE & Editors
+# ===================
+.idea/
+.vscode/
+*.code-workspace
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# ===================
+# Jupyter Notebooks
+# ===================
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ===================
+# Testing
+# ===================
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# ===================
+# OS Files
+# ===================
+.DS_Store
+Thumbs.db
+
+# ===================
+# MongoDB Dumps
+# ===================
+dump_clean/
+dump/
+*.bson
+
+# ===================
+# Backup files
+# ===================
+backup/
+*.backup
+*.bak
+
+# ===================
+# Logs
+# ===================
+*.log
+logs/
+
+# ===================
+# uv / pip
+# ===================
+.uv/
+uv.lock
