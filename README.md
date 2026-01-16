@@ -232,21 +232,3 @@ ruff check src/
 # Run tests
 pytest
 ```
-
-## License
-
-MIT License - see LICENSE file for details.
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run tests and linting
-5. Submit a pull request
-
-## Acknowledgments
-
-- Built with [Dash](https://dash.plotly.com/) and [Plotly](https://plotly.com/)
-- Search powered by [sentence-transformers](https://www.sbert.net/) and [FAISS](https://github.com/facebookresearch/faiss)
-- BM25 via [rank_bm25](https://github.com/dorianbrown/rank_bm25)
