@@ -27,11 +27,20 @@ Usage:
 """
 from __future__ import annotations
 
+# Set environment variables BEFORE imports to prevent segfaults on M1/M2 Macs
+import os
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+
 import hashlib
 import json
-import os
 import pickle
 import re
+import warnings
 from collections import OrderedDict
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -39,10 +48,16 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import faiss
 import numpy as np
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, MarkupResemblesLocatorWarning
 from rank_bm25 import BM25Okapi
 from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
+
+# Suppress BeautifulSoup URL warnings (we're parsing text that may contain URLs)
+warnings.filterwarnings("ignore", category=MarkupResemblesLocatorWarning)
+
+# Configure FAISS to use single thread (avoid multiprocessing issues on M1/M2 Macs)
+faiss.omp_set_num_threads(1)
 
 # --- Paths ---
 ARTIFACT_DIR = Path(__file__).parent.parent / "artifacts"
@@ -179,23 +194,26 @@ def make_chunks(doc: Dict[str, Any], order_start: int = 0) -> List[Chunk]:
     """Convert a job document into a list of chunks.
 
     Args:
-        doc: Job document with job_data and optional meta fields
+        doc: Job document with job_data and optional meta fields, or flat structure
         order_start: Starting order index for chunks
 
     Returns:
         List of Chunk objects
     """
-    desc = clean_text(doc.get("job_data", {}).get("description", ""))
+    # Support both flat structure and nested job_data structure
+    job_data = doc.get("job_data", doc)
+    
+    desc = clean_text(job_data.get("description", ""))
     if not desc:
         return []
 
-    job_key = doc.get("job_data", {}).get("jobUrl") or (
-        f"{doc.get('job_data', {}).get('companyName', 'unknown')}|"
-        f"{doc.get('job_data', {}).get('title', 'unknown')}"
+    job_key = job_data.get("jobUrl") or (
+        f"{job_data.get('companyName', 'unknown')}|"
+        f"{job_data.get('title', 'unknown')}"
     )
 
     # Try to respect line breaks for headers/bullets
-    soft_lines = re.sub(r"\s*\n\s*", "\n", doc.get("job_data", {}).get("description", ""))
+    soft_lines = re.sub(r"\s*\n\s*", "\n", job_data.get("description", ""))
     text_lines = [BeautifulSoup(ln, "html.parser").get_text(" ") for ln in soft_lines.split("\n")]
     text_lines = [re.sub(r"\s+", " ", ln).strip() for ln in text_lines]
     text_lines = [ln for ln in text_lines if ln]
@@ -219,18 +237,18 @@ def make_chunks(doc: Dict[str, Any], order_start: int = 0) -> List[Chunk]:
                 section=section_name,
                 order=order,
                 meta={
-                    "title": doc.get("job_data", {}).get("title"),
-                    "company": doc.get("job_data", {}).get("companyName"),
+                    "title": job_data.get("title"),
+                    "company": job_data.get("companyName"),
                     "days_old": doc.get("meta", {}).get("days_old"),
-                    "location": doc.get("job_data", {}).get("location"),
-                    "sector": doc.get("job_data", {}).get("sector"),
-                    "contractType": doc.get("job_data", {}).get("contractType"),
-                    "experienceLevel": doc.get("job_data", {}).get("experienceLevel"),
-                    "applyType": doc.get("job_data", {}).get("applyType"),
-                    "workType": doc.get("job_data", {}).get("workType"),
-                    "salary": doc.get("job_data", {}).get("salary"),
-                    "jobUrl": doc.get("job_data", {}).get("jobUrl"),
-                    "applyUrl": doc.get("job_data", {}).get("applyUrl"),
+                    "location": job_data.get("location"),
+                    "sector": job_data.get("sector"),
+                    "contractType": job_data.get("contractType"),
+                    "experienceLevel": job_data.get("experienceLevel"),
+                    "applyType": job_data.get("applyType"),
+                    "workType": job_data.get("workType"),
+                    "salary": job_data.get("salary"),
+                    "jobUrl": job_data.get("jobUrl"),
+                    "applyUrl": job_data.get("applyUrl"),
                     "applied_times": doc.get("meta", {}).get("applied_times"),
                 },
             )
@@ -254,7 +272,8 @@ def _get_model(model_name: str = "sentence-transformers/all-mpnet-base-v2") -> S
     """Return a cached SentenceTransformer instance for faster repeated calls."""
     global _MODEL
     if _MODEL is None or getattr(_MODEL, "_name", None) != model_name:
-        m = SentenceTransformer(model_name)
+        # Force CPU device to avoid MPS issues on M1/M2 Macs
+        m = SentenceTransformer(model_name, device='cpu')
         setattr(m, "_name", model_name)
         _MODEL = m
     return _MODEL  # type: ignore[return-value]
@@ -263,7 +282,14 @@ def _get_model(model_name: str = "sentence-transformers/all-mpnet-base-v2") -> S
 def embed_texts(texts: List[str], model_name: str = "sentence-transformers/all-mpnet-base-v2") -> np.ndarray:
     """Embed a list of texts using sentence-transformers."""
     model = _get_model(model_name)
-    vecs = model.encode(texts, batch_size=64, show_progress_bar=True, normalize_embeddings=True)
+    # Use smaller batch size and disable multi-process pool to avoid segfaults
+    vecs = model.encode(
+        texts, 
+        batch_size=32, 
+        show_progress_bar=True, 
+        normalize_embeddings=True,
+        convert_to_numpy=True
+    )
     return np.asarray(vecs, dtype="float32")
 
 
