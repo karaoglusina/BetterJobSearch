@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3:*)",
+      "Bash(python:*)",
+      "Bash(wc:*)",
+      "Bash(tree:*)",
+      "Bash(for d in src/facets src/ops src/scoring src/snapshots)",
+      "Bash(for f in data/chunks.csv data/labeled_chunks.csv data/labeled_chunks.custom.csv)",
+      "Bash(do if [ -f \"$f\" ])",
+      "Bash(then mv \"$f\" meta/legacy/v1_data/)",
+      "Bash(echo:*)",
+      "Bash(else echo \"Not found: $f\")",
+      "Bash(fi)",
+      "Bash(done)",
+      "Bash(do if [ -d \"$d\" ])",
+      "Bash(then rm -rf \"$d\")",
+      "Bash(ls:*)",
+      "Bash(uv cache clean:*)"
+    ]
+  }
+}
