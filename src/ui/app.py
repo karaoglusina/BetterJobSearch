@@ -153,11 +153,20 @@ def _initialize_from_sample() -> Dict[str, Any]:
             return {}
         
         # Convert to offline store format
+        # Handle both nested structure (job_data/meta) and flat structure
         out: Dict[str, Any] = {}
         for j in jobs_list:
-            jd = j.get("job_data", {})
-            meta = j.get("meta", {})
-            job_id = jd.get("jobUrl")
+            # Check if data is nested (has job_data key) or flat (jobUrl at top level)
+            if "job_data" in j:
+                # Nested structure
+                jd = j.get("job_data", {})
+                meta = j.get("meta", {})
+            else:
+                # Flat structure - use the job dict directly
+                jd = j
+                meta = {}
+            
+            job_id = jd.get("jobUrl") or jd.get("id")
             if not job_id:
                 continue
             
@@ -171,8 +180,8 @@ def _initialize_from_sample() -> Dict[str, Any]:
                 "workType": jd.get("workType"),
                 "url": job_id,
                 "companyUrl": jd.get("companyUrl"),
-                "description": jd.get("description"),
-                "applied_times": meta.get("applied_times"),
+                "description": jd.get("description") or jd.get("descriptionHtml", ""),
+                "applied_times": meta.get("applied_times") or jd.get("applicationsCount"),
                 "days_old": meta.get("days_old"),
                 "city": meta.get("city"),
                 "isNew": meta.get("isNew"),
@@ -190,9 +199,15 @@ def _initialize_from_sample() -> Dict[str, Any]:
         # Save to offline store
         if out:
             _atomic_write_json(paths["store"], out)
+            print(f"Initialized offline store with {len(out)} jobs from {sample_path}")
+        else:
+            print(f"Warning: No jobs were loaded from {sample_path}. Check the data format.")
         
         return out
-    except Exception:
+    except Exception as e:
+        print(f"Error initializing from sample data: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
         return {}
 
 
