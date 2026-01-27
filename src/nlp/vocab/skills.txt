@@ -1,0 +1,159 @@
+Python
+JavaScript
+TypeScript
+Java
+C#
+C++
+Go
+Rust
+Ruby
+PHP
+Swift
+Kotlin
+Scala
+R
+MATLAB
+Julia
+SQL
+NoSQL
+HTML
+CSS
+React
+Angular
+Vue.js
+Node.js
+Django
+Flask
+FastAPI
+Spring Boot
+.NET
+Express.js
+Next.js
+Svelte
+GraphQL
+REST API
+gRPC
+Machine Learning
+Deep Learning
+Natural Language Processing
+NLP
+Computer Vision
+Reinforcement Learning
+Neural Networks
+Transformers
+Large Language Models
+LLM
+Generative AI
+RAG
+Retrieval Augmented Generation
+Data Science
+Data Engineering
+Data Analysis
+Statistical Analysis
+A/B Testing
+ETL
+Data Warehousing
+Data Modeling
+Data Visualization
+Business Intelligence
+Power BI
+Tableau
+Looker
+Qlik
+Apache Spark
+Apache Kafka
+Apache Airflow
+Apache Flink
+Hadoop
+Databricks
+Snowflake
+BigQuery
+Redshift
+dbt
+Pandas
+NumPy
+Scikit-learn
+PyTorch
+TensorFlow
+Keras
+Hugging Face
+OpenAI API
+LangChain
+LlamaIndex
+spaCy
+NLTK
+XGBoost
+LightGBM
+CatBoost
+MLflow
+Kubeflow
+Weights & Biases
+AWS
+Azure
+GCP
+Google Cloud
+Docker
+Kubernetes
+Terraform
+Ansible
+Jenkins
+CI/CD
+GitHub Actions
+GitLab CI
+Linux
+Unix
+Bash
+Shell Scripting
+Git
+SVN
+MongoDB
+PostgreSQL
+MySQL
+Redis
+Elasticsearch
+Cassandra
+DynamoDB
+Neo4j
+FAISS
+Pinecone
+Weaviate
+Qdrant
+ChromaDB
+Milvus
+Figma
+Sketch
+Adobe XD
+Photoshop
+Illustrator
+Jira
+Confluence
+Trello
+Asana
+Monday.com
+SAP
+Salesforce
+ServiceNow
+Oracle
+Mendix
+Power Apps
+Power Automate
+OutSystems
+Microservices
+Serverless
+API Design
+System Design
+Cloud Architecture
+DevOps
+MLOps
+DataOps
+SRE
+Agile
+Scrum
+Kanban
+SAFe
+Object-Oriented Programming
+Functional Programming
+Test-Driven Development
+Clean Architecture
+Design Patterns
+SOLID

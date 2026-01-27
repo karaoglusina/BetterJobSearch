@@ -1,223 +1,345 @@
 # BetterJobSearch
 
-A job market analysis toolkit with RAG-powered semantic search, clustering visualization, and an interactive web UI.
+Job market analysis toolkit with hybrid RAG search, deterministic NLP aspect extraction, UMAP/HDBSCAN clustering, a multi-agent system, and a React + FastAPI interface.
 
 ## Features
 
-- **Hybrid Search**: Combines semantic (SBERT) and keyword (BM25) search for accurate job discovery
-- **Interactive Web UI**: 3-panel Dash application for exploring, filtering, and analyzing jobs
-- **Clustering**: Visualize job market segments using TF-IDF/SBERT embeddings
-- **LLM Integration**: Optional GPT-powered company summaries, job summaries, and intelligent job selection
-- **Boolean Search**: Full support for AND/OR/NOT queries with phrase matching
-- **Offline-First**: All data stored locally - no external database required
+- **Hybrid Search** -- SBERT semantic + BM25 keyword search with tunable alpha blending
+- **NLP Aspect Extraction** -- deterministic extraction of skills, tools, language requirements, remote policy, experience, education, and benefits using spaCy PhraseMatcher and regex. Optional LLM-based domain and culture classification
+- **UMAP + HDBSCAN Clustering** -- non-linear 2D projections with density-based clustering, dynamic re-clustering by aspect or free-text concept
+- **Multi-Agent System** -- coordinator with intent classification routing to search, analysis, and exploration workers via a ReAct loop with OpenAI function calling
+- **Tiered Context Management** -- 4-tier context strategy (aspects only ~50 tokens/job up to full text ~800 tokens/job) for efficient LLM usage
+- **FastAPI Backend** -- REST API for jobs, search, clusters, aspects, plus WebSocket agentic chat
+- **React Frontend** -- Plotly.js scatter plot (WebGL), AG Grid job table, live chat panel with tool call visibility
+- **Offline-First** -- all data stored locally as JSON/JSONL, FAISS index, and BM25 pickle. No external database required
 
 ## Installation
+
+**Requires Python 3.10, 3.11, or 3.12.** Python 3.13 is not supported due to UMAP/HDBSCAN compatibility.
 
 ### Using uv (Recommended)
 
 ```bash
-# Install uv if you don't have it
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
 # Clone the repository
 git clone https://github.com/karaoglusina/better-job-search.git
 cd better-job-search
 
-# Create virtual environment and install dependencies
-uv venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install core dependencies
-uv pip install -e .
-
-# Install with UI support
-uv pip install -e ".[ui]"
-
-# Install with LLM features
-uv pip install -e ".[llm]"
-
-# Install everything
+# Create virtual environment with a compatible Python version
+uv venv --python 3.12
+source .venv/bin/activate
 uv pip install -e ".[all]"
+
+# Download spaCy model (requires pip inside the venv)
+uv pip install pip
+python -m spacy download en_core_web_sm
 ```
 
-### Using pip
+### Using pip (alternative)
 
 ```bash
 pip install -e ".[all]"
+python -m spacy download en_core_web_sm
 ```
+
 
 ## Quick Start
 
 ### 1. Build the Search Index
 
 ```bash
-# Using the included sample data
+# Build from included sample data
 python -m src.pipeline build
 
-# Or specify your own data file
-python -m src.pipeline build --data path/to/your/jobs.json
+# Build from your own data
+python -m src.pipeline build --data path/to/jobs.json
+
+# Build with keyword extraction (slower, enables keyword tools)
+python -m src.pipeline build --keywords
+
+# Build with LLM-based domain/culture classification
+python -m src.pipeline build --llm-aspects
 ```
 
-### 2. Start the Web UI
+This creates `artifacts/faiss.index`, `artifacts/bm25.pkl`, `artifacts/chunks.jsonl`, and optionally `artifacts/aspects.jsonl`.
+
+### 2. Start the API + React UI
 
 ```bash
-python -m src.pipeline ui
+# Terminal 1: start the FastAPI backend
+python -m src.pipeline serve
+
+# Terminal 2: start the React dev server
+cd frontend
+npm install
+npm run dev
 ```
 
-Then open http://localhost:8050 in your browser.
+Open http://localhost:5173 in your browser.
 
-### 3. Search from Command Line
+### 3. Search from the CLI
 
 ```bash
 python -m src.pipeline search "machine learning engineer"
+python -m src.pipeline search "remote python" --k 15 --alpha 0.7
 ```
+
+### 4. Agentic Chat (requires OpenAI API key)
+
+```bash
+export OPENAI_API_KEY=sk-...
+python -m src.pipeline chat
+```
+
+The agent classifies your intent and routes to specialized workers:
+- **Search**: "Find Python jobs in Amsterdam"
+- **Compare**: "Compare these 3 jobs"
+- **Explore**: "What kinds of AI jobs exist?"
+- **Detail**: "Tell me about this job"
 
 ## Data Format
 
-The system expects job data in JSON format. Each job should have:
+The system expects job data as a JSON file. Each job document:
 
 ```json
 {
   "job_data": {
     "title": "Senior Data Engineer",
     "companyName": "TechCorp",
-    "description": "Full job description...",
+    "description": "Full job description HTML or text...",
     "location": "Amsterdam, Netherlands",
     "jobUrl": "https://linkedin.com/jobs/view/...",
-    "applyType": "EasyApply",
     "contractType": "Full-time",
     "workType": "Remote"
   },
   "meta": {
-    "days_old": 3,
-    "applied_times": 42
+    "days_old": 3
   }
 }
 ```
 
-The JSON file can be either:
-- A list of job objects: `[{job1}, {job2}, ...]`
-- A dict with a "jobs" key: `{"jobs": [{job1}, {job2}, ...]}`
-
-## Web UI Features
-
-### Filters Panel
-- Title, location, city dropdowns
-- Boolean search with AND/OR/NOT and quoted phrases
-- Semantic search for ranking by relevance
-- Applied times and days old ranges
-- Label filtering (yes/no/custom tags)
-
-### Table View
-- Sortable, filterable job grid
-- Company logos (auto-fetched)
-- LLM-generated summaries (requires OpenAI API key)
-- Excel export
-
-### Clusters View
-- Domain and Role scatter plots
-- Click to select jobs
-- Adjust cluster count (k)
-
-### Details Panel
-- Full job description
-- Company and job summaries
-- Quick labeling (yes/no buttons)
-- Custom tagging
+The JSON file can be a list `[{job1}, {job2}]` or a dict `{"jobs": [{job1}, {job2}]}`.
 
 ## Configuration
 
-Copy `.env.example` to `.env` and configure:
+Copy `.env.example` to `.env`:
 
 ```bash
-# Required for LLM features
-OPENAI_API_KEY=sk-your-key-here
-
-# Optional: for logo search fallback
-GOOGLE_API_KEY=your-google-api-key
-GOOGLE_CSE_ID=your-custom-search-id
+cp .env.example .env
 ```
+
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `OPENAI_API_KEY` | For LLM features | Agentic chat, domain/culture extraction, cluster labeling |
+| `GOOGLE_API_KEY` | No | Company logo search fallback |
+| `GOOGLE_CSE_ID` | No | Custom search engine ID for logos |
+
+## Architecture
+
+### NLP Pipeline (`src/nlp/`)
+
+Deterministic aspect extraction runs at index time:
+
+| Aspect | Method | Example Output |
+|--------|--------|----------------|
+| Skills | spaCy PhraseMatcher | `["Python", "SQL", "Power BI"]` |
+| Tools | spaCy PhraseMatcher | `["Docker", "Kubernetes", "AWS"]` |
+| Language | Regex patterns | `["Dutch required", "English fluent"]` |
+| Remote Policy | Regex + priority | `"hybrid"` |
+| Experience | Regex + NER | `"3-5 years"`, `"senior"` |
+| Education | Regex patterns | `["BSc Computer Science"]` |
+| Benefits | Keyword matching | `["pension", "equity", "flexible hours"]` |
+| Domain | LLM (optional) | `"FinTech"` |
+| Culture | LLM (optional) | `["innovative", "fast-paced"]` |
+
+Entity normalization with rapidfuzz ensures `"JS"` / `"Javascript"` / `"JavaScript"` map to the same canonical form.
+
+### Search (`src/search/`)
+
+- **FAISS** (`IndexFlatIP`) for dense vector retrieval using SBERT embeddings
+- **BM25** for sparse keyword retrieval
+- **Hybrid** blending with configurable alpha (0.55 default)
+- **Cross-encoder reranking** (optional, `ms-marco-MiniLM-L-6-v2`)
+
+### Clustering (`src/clustering_v2/`)
+
+- **UMAP** for 2D projection (non-linear, preserves topology)
+- **HDBSCAN** for density-based clustering (auto-k, noise detection)
+- **c-TF-IDF** for cluster label extraction
+- **Aspect-based re-clustering**: select an aspect and the scatter plot re-clusters using binary feature matrices
+- **Concept-based clustering**: type any concept (e.g., "customer-facing") and jobs are re-projected weighted by concept similarity
+- Results cached to parquet files
+
+### Agent System (`src/agents/`)
+
+```
+User Query
+    |
+Coordinator (intent classification)
+    |
+    +-> SearchWorker      (hybrid_search, semantic_search, keyword_search, filter_jobs)
+    +-> AnalysisWorker    (get_job_summary, get_chunks, compare_aspects, find_similar)
+    +-> ExplorationWorker (cluster_by_aspect, browse_cluster, aspect_distribution)
+    |
+Result synthesis
+```
+
+All agents use a shared ReAct loop (`src/agents/loop.py`) with OpenAI function calling. Context is managed in 4 tiers to stay within token budgets.
+
+### API (`src/api/`)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/jobs` | List jobs with filtering and pagination |
+| `GET` | `/api/jobs/{id}` | Job detail with chunks |
+| `POST` | `/api/search` | Hybrid search with filters |
+| `GET` | `/api/clusters/{aspect}` | UMAP + HDBSCAN clusters for an aspect |
+| `POST` | `/api/clusters/concept` | Cluster by free-text concept |
+| `GET` | `/api/aspects` | List available aspects |
+| `GET` | `/api/aspects/{name}/distribution` | Value distribution for an aspect |
+| `WS` | `/api/chat` | WebSocket agentic chat |
+| `GET` | `/api/health` | Health check |
+
+### Frontend (`frontend/`)
+
+React 18 + TypeScript + Vite. Key components:
+
+- **ScatterPlot** -- Plotly.js WebGL scatter with cluster coloring and job highlighting
+- **JobTable** -- AG Grid with sortable columns, pagination, row selection
+- **ChatPanel** -- WebSocket chat with streaming responses and tool call display
+- **AspectSelector** -- Pill buttons for predefined aspects + free-text concept input
+- **FilterPanel** -- Location, company, title text filters
+- **JobDetail** -- Expandable panel with full job description
 
 ## Project Structure
 
 ```
 better-job-search/
 ├── src/
-│   ├── __init__.py
-│   ├── config.py           # Configuration and paths
-│   ├── pipeline.py         # Main CLI entry point
-│   ├── rag.py              # RAG pipeline (chunking, indexing, retrieval)
-│   ├── retrieval.py        # Retrieval helpers
-│   ├── clustering.py       # Job/chunk clustering
-│   ├── agentic_rag.py      # Multi-hop LLM retrieval
-│   ├── llm_io.py           # LLM utilities
-│   └── ui/
-│       ├── app.py          # Dash web application
-│       └── assets/
-│           └── styles.css
+│   ├── pipeline.py                 # CLI entry point (build, serve, search, chat)
+│   ├── config.py                   # Paths, API keys, feature flags
+│   ├── rag.py                      # Core RAG engine (chunking, indexing, retrieval)
+│   ├── models/                     # Pydantic data models
+│   │   ├── aspect.py               #   AspectExtraction, DomainClassification
+│   │   ├── chunk.py                #   Chunk, ChunkWithAspects
+│   │   ├── job.py                  #   Job, JobSummary, JobDetail
+│   │   ├── cluster.py              #   ClusterResult, ClusterInfo
+│   │   └── agent.py                #   AgentResult, ToolCall, IntentClassification
+│   ├── nlp/                        # Deterministic NLP pipeline
+│   │   ├── aspect_extractor.py     #   Orchestrates all extractors
+│   │   ├── cleaner.py              #   HTML cleaning, text normalization
+│   │   ├── section_detector.py     #   Section boundary detection
+│   │   ├── chunker.py              #   Aspect-aware chunking
+│   │   ├── keyword_extractor.py    #   KeyBERT + TF-IDF
+│   │   ├── entity_normalizer.py    #   rapidfuzz deduplication
+│   │   ├── extractors/             #   Per-aspect extractors
+│   │   │   ├── skills.py           #     spaCy PhraseMatcher
+│   │   │   ├── language.py         #     Regex patterns
+│   │   │   ├── remote_policy.py    #     Regex + priority
+│   │   │   ├── experience.py       #     Regex + NER
+│   │   │   ├── education.py        #     Regex patterns
+│   │   │   ├── benefits.py         #     Keyword matching
+│   │   │   ├── domain.py           #     LLM classification
+│   │   │   └── culture.py          #     LLM extraction
+│   │   └── vocab/                  #   Vocabulary files
+│   │       ├── skills.txt
+│   │       ├── tools.txt
+│   │       ├── languages.txt
+│   │       └── degrees.txt
+│   ├── search/                     # Hybrid search system
+│   │   ├── embedder.py             #   SBERT embedding (M1/M2 compatible)
+│   │   ├── indexer.py              #   FAISS + BM25 index building
+│   │   ├── retriever.py            #   HybridRetriever class
+│   │   └── reranker.py             #   Cross-encoder reranking
+│   ├── clustering_v2/              # UMAP + HDBSCAN clustering
+│   │   ├── projector.py            #   UMAP 2D projection
+│   │   ├── clusterer.py            #   HDBSCAN clustering
+│   │   ├── labeler.py              #   c-TF-IDF + LLM labels
+│   │   ├── aspect_clustering.py    #   Per-aspect re-clustering
+│   │   └── cache.py                #   Parquet caching
+│   ├── agents/                     # Multi-agent system
+│   │   ├── coordinator.py          #   Intent classification + routing
+│   │   ├── loop.py                 #   Reusable ReAct loop
+│   │   ├── context.py              #   4-tier context management
+│   │   ├── memory.py               #   Sliding window + summary memory
+│   │   ├── workers/
+│   │   │   ├── search_worker.py
+│   │   │   ├── analysis_worker.py
+│   │   │   └── exploration_worker.py
+│   │   └── tools/
+│   │       ├── registry.py         #   Tool name -> handler mapping
+│   │       ├── search_tools.py
+│   │       ├── retrieval_tools.py
+│   │       ├── cluster_tools.py
+│   │       └── nlp_tools.py
+│   └── api/                        # FastAPI backend
+│       ├── main.py                 #   App factory, CORS, lifespan
+│       └── routes/
+│           ├── jobs.py
+│           ├── search.py
+│           ├── clusters.py
+│           ├── aspects.py
+│           └── chat.py             #   WebSocket endpoint
+├── frontend/                       # React + Vite + TypeScript
+│   ├── src/
+│   │   ├── App.tsx                 #   Main layout
+│   │   ├── api/client.ts           #   Typed API client
+│   │   ├── components/
+│   │   │   ├── ScatterPlot.tsx
+│   │   │   ├── JobTable.tsx
+│   │   │   ├── ChatPanel.tsx
+│   │   │   ├── AspectSelector.tsx
+│   │   │   ├── JobDetail.tsx
+│   │   │   └── FilterPanel.tsx
+│   │   └── hooks/
+│   │       ├── useWebSocket.ts
+│   │       ├── useJobs.ts
+│   │       └── useClusters.ts
+│   ├── package.json
+│   ├── vite.config.ts
+│   └── tsconfig.json
 ├── config/
-│   ├── facets.yml          # Facet taxonomy
-│   └── scoring.yml         # Scoring weights
+│   ├── facets.yml                  # 14-facet taxonomy
+│   ├── facet_synonyms.yml
+│   └── scoring.yml
 ├── data/
-│   └── sample_jobs.json    # Sample dataset
-├── artifacts/              # Generated search indexes (gitignored)
-├── archive/                # Archived code for reference
+│   └── sample_jobs.json            # Sample dataset
+├── artifacts/                      # Generated at build time (gitignored)
+├── meta/
+│   ├── docs/                       # Reference documentation
+│   └── legacy/                     # Archived v1 code
 ├── pyproject.toml
 ├── .env.example
 └── README.md
 ```
 
-## API Reference
+## CLI Reference
 
-### Pipeline Functions
-
-```python
-from src.pipeline import load_jobs, build_index, search, run_ui
-
-# Load job data
-jobs = load_jobs("data/sample_jobs.json")
-
-# Build search index
-build_index(jobs=jobs)
-
-# Search
-search("data engineer python", k=10)
-
-# Start UI
-run_ui(port=8050)
 ```
+python -m src.pipeline <command> [options]
 
-### RAG Module
+Commands:
+  build    Build RAG index from job data
+  serve    Start FastAPI backend (for React UI)
+  search   Search for jobs from the command line
+  chat     Interactive agentic chat (requires OpenAI API key)
 
-```python
-from src import rag
+build options:
+  --data, -d PATH     Path to JSON file (default: data/sample_jobs.json)
+  --no-aspects        Skip NLP aspect extraction
+  --keywords          Run TF-IDF keyword extraction
+  --llm-aspects       Enable LLM-based domain/culture extraction
 
-# Load artifacts
-rag.load_cache()
+serve options:
+  --port, -p PORT     Port number (default: 8000)
+  --reload            Enable auto-reload for development
 
-# Retrieve chunks
-chunks = rag.retrieve("machine learning", k=8, alpha=0.55)
+search options:
+  QUERY               Search query string
+  --k, -k N           Number of results (default: 8)
+  --alpha, -a FLOAT   Hybrid weight, 1.0=vectors 0.0=BM25 (default: 0.55)
 
-# Filtered retrieval
-chunks = rag.retrieve_filtered(
-    query="python",
-    where=lambda c: c.meta.get("location") == "Amsterdam",
-    k=10
-)
-```
-
-### Clustering
-
-```python
-from src.clustering import cluster_chunks, cluster_jobs
-
-# Cluster retrieved chunks
-result = cluster_chunks(chunks, n_clusters=5)
-print(result["keywords"])  # Top terms per cluster
-
-# Cluster all jobs
-result = cluster_jobs(embed_mode="sbert")
-df = result["df"]  # DataFrame with x, y, cluster columns
+chat options:
+  --model, -m MODEL   OpenAI model (default: gpt-4o-mini)
 ```
 
 ## Development
@@ -226,9 +348,16 @@ df = result["df"]  # DataFrame with x, y, cluster columns
 # Install dev dependencies
 uv pip install -e ".[dev]"
 
-# Run linter
+# Lint
 ruff check src/
 
-# Run tests
+# Tests
 pytest
+
+# Start API with auto-reload
+python -m src.pipeline serve --reload
 ```
+
+## License
+
+MIT

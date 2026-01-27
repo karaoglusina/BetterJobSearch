@@ -43,6 +43,7 @@ sinajobs_env/
 artifacts/*.index
 artifacts/*.pkl
 artifacts/*.jsonl
+artifacts/cluster_cache/
 
 # ===================
 # User Data
@@ -50,6 +51,9 @@ artifacts/*.jsonl
 data/offline_*.json*
 data/*.parquet
 data/job_group_embeddings.parquet
+data/sample_jobs.json
+
+meta/
 
 # ===================
 # IDE & Editors
@@ -110,3 +114,10 @@ logs/
 # ===================
 .uv/
 uv.lock
+
+# ===================
+# Frontend (React/Vite)
+# ===================
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/

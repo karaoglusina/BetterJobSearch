@@ -1,0 +1,112 @@
+Docker
+Kubernetes
+AWS
+Azure
+GCP
+Google Cloud Platform
+Terraform
+Ansible
+Chef
+Puppet
+Jenkins
+GitHub Actions
+GitLab CI
+CircleCI
+Travis CI
+ArgoCD
+Helm
+Prometheus
+Grafana
+Datadog
+New Relic
+Splunk
+ELK Stack
+Kibana
+Logstash
+Nginx
+Apache
+HAProxy
+RabbitMQ
+Apache Kafka
+Redis
+Memcached
+Celery
+Airflow
+Prefect
+Dagster
+dbt
+Fivetran
+Stitch
+Informatica
+Talend
+SSIS
+Tableau
+Power BI
+Looker
+Metabase
+Superset
+Qlik
+MicroStrategy
+Jupyter
+VS Code
+IntelliJ
+PyCharm
+Eclipse
+Postman
+Swagger
+Insomnia
+Figma
+Sketch
+Adobe XD
+Miro
+Notion
+Jira
+Confluence
+Trello
+Asana
+Monday.com
+Linear
+Slack
+Microsoft Teams
+Zoom
+SAP
+Salesforce
+ServiceNow
+Dynamics 365
+HubSpot
+Zendesk
+Intercom
+Oracle
+Mendix
+Power Apps
+Power Automate
+OutSystems
+Appian
+Snowflake
+Databricks
+BigQuery
+Redshift
+Synapse
+Fabric
+S3
+Azure Blob Storage
+GCS
+MLflow
+Kubeflow
+SageMaker
+Vertex AI
+Azure ML
+Weights & Biases
+Neptune.ai
+DVC
+Label Studio
+Langfuse
+OpenTelemetry
+Sentry
+PagerDuty
+OpsGenie
+Vault
+Keycloak
+Auth0
+Okta
+Active Directory
