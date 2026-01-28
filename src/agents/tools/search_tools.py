@@ -26,21 +26,26 @@ def _format_results(chunks: List[Dict[str, Any]], max_results: int = 10) -> str:
 
     lines: List[str] = []
     seen_jobs: set[str] = set()
+    job_ids: List[str] = []
     for ch in chunks[:max_results * 3]:  # oversample to get unique jobs
         jk = ch.get("job_key", "")
         if jk in seen_jobs:
             continue
         seen_jobs.add(jk)
+        job_ids.append(jk)
         meta = ch.get("meta", {})
         title = meta.get("title", "?")
         company = meta.get("company", "?")
         location = meta.get("location", "")
         snippet = ch.get("text", "")[:150]
-        lines.append(f"- {title} @ {company} ({location}) | {snippet}...")
+        lines.append(f"- [{jk}] {title} @ {company} ({location}) | {snippet}...")
         if len(lines) >= max_results:
             break
 
-    return f"Found {len(chunks)} chunks across {len(seen_jobs)} jobs:\n" + "\n".join(lines)
+    result = f"Found {len(chunks)} chunks across {len(seen_jobs)} jobs:\n" + "\n".join(lines)
+    # Append machine-readable job IDs for UI integration
+    result += f"\n[JOB_IDS:{','.join(job_ids)}]"
+    return result
 
 
 def semantic_search(query: str, k: int = 8) -> str:

@@ -51,6 +51,8 @@ class ClusterCache:
         y: List[float],
         cluster_ids: List[int],
         cluster_labels: Optional[Dict[int, str]] = None,
+        titles: Optional[List[str]] = None,
+        companies: Optional[List[str]] = None,
     ) -> None:
         """Save projection to parquet.
 
@@ -61,15 +63,22 @@ class ClusterCache:
             y: Y coordinates.
             cluster_ids: Cluster assignments.
             cluster_labels: Optional mapping of cluster_id -> label.
+            titles: Optional job titles.
+            companies: Optional company names.
         """
         labels_map = cluster_labels or {}
-        df = pd.DataFrame({
+        data: Dict[str, Any] = {
             "job_id": job_ids,
             "x": x,
             "y": y,
             "cluster_id": cluster_ids,
             "cluster_label": [labels_map.get(cid, f"Cluster {cid}") for cid in cluster_ids],
-        })
+        }
+        if titles is not None:
+            data["title"] = titles
+        if companies is not None:
+            data["company"] = companies
+        df = pd.DataFrame(data)
         df.to_parquet(self._path(aspect), index=False)
 
     def invalidate(self, aspect: Optional[str] = None) -> None:

@@ -33,13 +33,13 @@ export default function AspectSelector({ currentAspect, onSelect, onConceptSubmi
           <button
             key={aspect}
             onClick={() => onSelect(aspect)}
-            disabled={loading}
+            disabled={false}
             style={{
               padding: '4px 10px', borderRadius: 12, fontSize: 12,
               border: `1px solid ${currentAspect === aspect ? 'var(--accent)' : 'var(--border)'}`,
               background: currentAspect === aspect ? 'var(--accent)' : 'transparent',
               color: currentAspect === aspect ? 'white' : 'var(--text-secondary)',
-              cursor: loading ? 'wait' : 'pointer',
+              cursor: 'pointer',
               transition: 'all 0.15s',
             }}
           >

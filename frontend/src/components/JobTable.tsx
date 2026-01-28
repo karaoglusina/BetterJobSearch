@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-alpine.css';
@@ -10,7 +10,7 @@ interface JobTableProps {
   selectedJobId?: string | null;
 }
 
-export default function JobTable({ jobs, onJobSelect, selectedJobId }: JobTableProps) {
+export default function JobTable({ jobs, onJobSelect }: JobTableProps) {
   const gridRef = useRef<AgGridReact>(null);
 
   const columnDefs = useMemo(() => [
@@ -20,6 +20,7 @@ export default function JobTable({ jobs, onJobSelect, selectedJobId }: JobTableP
     { field: 'days_old', headerName: 'Days', width: 70, type: 'numericColumn' },
     { field: 'contract_type', headerName: 'Type', width: 100 },
     { field: 'work_type', headerName: 'Work', width: 100 },
+    { field: 'language', headerName: 'Lang', width: 60 },
   ], []);
 
   const defaultColDef = useMemo(() => ({

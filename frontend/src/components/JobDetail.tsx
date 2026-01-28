@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../api/client';
 
 interface JobDetailProps {
@@ -30,8 +30,13 @@ export default function JobDetail({ jobId, onClose }: JobDetailProps) {
     }
     setLoading(true);
     api.getJob(jobId)
-      .then((data) => setJob(data as unknown as JobFullDetail))
-      .catch(() => setJob(null))
+      .then((data) => {
+        setJob(data as unknown as JobFullDetail);
+      })
+      .catch((error) => {
+        console.error('Failed to load job detail:', error);
+        setJob(null);
+      })
       .finally(() => setLoading(false));
   }, [jobId]);
 
@@ -50,7 +55,13 @@ export default function JobDetail({ jobId, onClose }: JobDetailProps) {
         }}>×</button>
       </div>
 
-      {loading && <div style={{ color: 'var(--text-secondary)' }}>Loading...</div>}
+      {loading && <div style={{ color: 'var(--text-secondary)' }}>Loading job details...</div>}
+
+      {!loading && !job && (
+        <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
+          Failed to load job details. Check console for errors.
+        </div>
+      )}
 
       {job && (
         <div>

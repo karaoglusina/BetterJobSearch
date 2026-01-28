@@ -1,39 +1,45 @@
 """SBERT embedding utilities.
 
-Uses MPS (Metal Performance Shaders) on Apple Silicon when available,
-falls back to CPU otherwise.
+Forces CPU device to avoid segfaults on Apple Silicon (M1/M2/M3)
+when multiple threads access the model concurrently.
 """
 
 from __future__ import annotations
 
+# Must be set BEFORE importing numpy/torch/sentence-transformers
 import os
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+os.environ.setdefault("VECLIB_MAXIMUM_THREADS", "1")
+os.environ.setdefault("NUMEXPR_NUM_THREADS", "1")
+
+import threading
 from typing import List
 
 import numpy as np
-
-os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
 DEFAULT_MODEL = "sentence-transformers/all-mpnet-base-v2"
 
 _model = None
 _model_name = None
-
-
-def _best_device() -> str:
-    """Pick the best available device: MPS (Apple Silicon) > CPU."""
-    import torch
-    if torch.backends.mps.is_available():
-        return "mps"
-    return "cpu"
+_model_lock = threading.Lock()
 
 
 def get_model(model_name: str = DEFAULT_MODEL):
-    """Return a cached SentenceTransformer instance."""
+    """Return a cached SentenceTransformer instance (thread-safe)."""
     global _model, _model_name
-    if _model is None or _model_name != model_name:
+    if _model is not None and _model_name == model_name:
+        return _model
+    with _model_lock:
+        # Double-check after acquiring lock
+        if _model is not None and _model_name == model_name:
+            return _model
         from sentence_transformers import SentenceTransformer
-        device = _best_device()
-        _model = SentenceTransformer(model_name, device=device)
+        # Force CPU to avoid MPS segfaults with concurrent thread access
+        _model = SentenceTransformer(model_name, device="cpu")
         _model_name = model_name
     return _model
 

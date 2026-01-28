@@ -25,21 +25,55 @@ export interface WsMessage {
   message?: string;
 }
 
-export function useWebSocket() {
+const MAX_RECONNECT_ATTEMPTS = 5;
+const RECONNECT_BASE_DELAY = 1000;
+
+export function useWebSocket(onSetJobs?: (jobIds: string[]) => void) {
   const wsRef = useRef<WebSocket | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const reconnectAttempts = useRef(0);
+  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountedRef = useRef(true);
+  const onSetJobsRef = useRef(onSetJobs);
+  onSetJobsRef.current = onSetJobs;
 
-  useEffect(() => {
+  const connect = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN || !mountedRef.current) return;
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${protocol}//${window.location.host}/api/chat`);
+    const wsUrl = `${protocol}//${window.location.host}/api/chat`;
 
-    ws.onopen = () => setIsConnected(true);
-    ws.onclose = () => setIsConnected(false);
-    ws.onerror = () => setIsConnected(false);
+    const ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      if (!mountedRef.current) { ws.close(); return; }
+      setIsConnected(true);
+      reconnectAttempts.current = 0;
+    };
+
+    ws.onclose = () => {
+      if (!mountedRef.current) return;
+      setIsConnected(false);
+      setIsLoading(false);
+
+      if (reconnectAttempts.current < MAX_RECONNECT_ATTEMPTS) {
+        const delay = RECONNECT_BASE_DELAY * Math.pow(2, reconnectAttempts.current);
+        reconnectAttempts.current += 1;
+        reconnectTimer.current = setTimeout(() => {
+          if (mountedRef.current) connect();
+        }, delay);
+      }
+    };
+
+    ws.onerror = () => {
+      if (!mountedRef.current) return;
+      setIsConnected(false);
+    };
 
     ws.onmessage = (event) => {
+      if (!mountedRef.current) return;
       const data: WsMessage = JSON.parse(event.data);
 
       if (data.type === 'answer') {
@@ -56,15 +90,38 @@ export function useWebSocket() {
       } else if (data.type === 'error') {
         setMessages((prev) => [
           ...prev,
-          { role: 'system', content: `Error: ${data.message}` },
+          { role: 'system', content: `Error: ${data.message || data.error || 'Unknown error'}` },
         ]);
         setIsLoading(false);
+      } else if (data.type === 'tool_call') {
+        setMessages((prev) => [
+          ...prev,
+          { role: 'system', content: `Using tool: ${data.tool}` },
+        ]);
+      } else if (data.type === 'ui_action' && data.action === 'set_jobs' && data.job_ids) {
+        if (onSetJobsRef.current) {
+          onSetJobsRef.current(data.job_ids);
+        }
       }
     };
 
     wsRef.current = ws;
-    return () => ws.close();
   }, []);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    connect();
+
+    return () => {
+      mountedRef.current = false;
+      if (reconnectTimer.current) {
+        clearTimeout(reconnectTimer.current);
+      }
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, [connect]);
 
   const sendMessage = useCallback((content: string) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;

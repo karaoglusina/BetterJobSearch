@@ -15,8 +15,6 @@ Job market analysis toolkit with hybrid RAG search, deterministic NLP aspect ext
 
 ## Installation
 
-**Requires Python 3.10, 3.11, or 3.12.** Python 3.13 is not supported due to UMAP/HDBSCAN compatibility.
-
 ### Using uv (Recommended)
 
 ```bash
@@ -30,7 +28,6 @@ source .venv/bin/activate
 uv pip install -e ".[all]"
 
 # Download spaCy model (requires pip inside the venv)
-uv pip install pip
 python -m spacy download en_core_web_sm
 ```
 
@@ -40,7 +37,6 @@ python -m spacy download en_core_web_sm
 pip install -e ".[all]"
 python -m spacy download en_core_web_sm
 ```
-
 
 ## Quick Start
 
@@ -64,17 +60,45 @@ This creates `artifacts/faiss.index`, `artifacts/bm25.pkl`, `artifacts/chunks.js
 
 ### 2. Start the API + React UI
 
-```bash
-# Terminal 1: start the FastAPI backend
-python -m src.pipeline serve
+The application consists of two separate servers that need to run simultaneously:
 
-# Terminal 2: start the React dev server
+**Terminal 1: FastAPI Backend (Port 8000)**
+
+```bash
+# Start the FastAPI backend server
+python -m src.pipeline serve
+```
+
+This starts the backend API server on `http://localhost:8000` that provides:
+
+- REST endpoints for jobs, search, clusters, and aspects (`/api/jobs`, `/api/search`, etc.)
+- WebSocket endpoint for agentic chat (`/api/chat`)
+- Health check endpoint (`/api/health`)
+
+**Terminal 2: React Frontend (Port 5173)**
+
+```bash
+# Navigate to the frontend directory
 cd frontend
+
+# Install Node.js dependencies (only needed once, or when package.json changes)
 npm install
+
+# Start the Vite development server
 npm run dev
 ```
 
-Open http://localhost:5173 in your browser.
+This starts the React development server on `http://localhost:5173` that:
+
+- Serves the React UI built with Vite
+- Automatically reloads when you make code changes
+- Connects to the FastAPI backend via API calls
+
+**Access the Application:**
+
+Open http://localhost:5173 in your browser. The React frontend will automatically communicate with the FastAPI backend running on port 8000.
+
+The frontend makes HTTP requests to the backend API, and the backend serves the data and handles search/clustering operations.
 
 ### 3. Search from the CLI
 
@@ -91,6 +115,7 @@ python -m src.pipeline chat
 ```
 
 The agent classifies your intent and routes to specialized workers:
+
 - **Search**: "Find Python jobs in Amsterdam"
 - **Compare**: "Compare these 3 jobs"
 - **Explore**: "What kinds of AI jobs exist?"
@@ -127,11 +152,11 @@ Copy `.env.example` to `.env`:
 cp .env.example .env
 ```
 
-| Variable | Required | Purpose |
-|----------|----------|---------|
+| Variable         | Required         | Purpose                                                   |
+| ---------------- | ---------------- | --------------------------------------------------------- |
 | `OPENAI_API_KEY` | For LLM features | Agentic chat, domain/culture extraction, cluster labeling |
-| `GOOGLE_API_KEY` | No | Company logo search fallback |
-| `GOOGLE_CSE_ID` | No | Custom search engine ID for logos |
+| `GOOGLE_API_KEY` | No               | Company logo search fallback                              |
+| `GOOGLE_CSE_ID`  | No               | Custom search engine ID for logos                         |
 
 ## Architecture
 
@@ -139,17 +164,17 @@ cp .env.example .env
 
 Deterministic aspect extraction runs at index time:
 
-| Aspect | Method | Example Output |
-|--------|--------|----------------|
-| Skills | spaCy PhraseMatcher | `["Python", "SQL", "Power BI"]` |
-| Tools | spaCy PhraseMatcher | `["Docker", "Kubernetes", "AWS"]` |
-| Language | Regex patterns | `["Dutch required", "English fluent"]` |
-| Remote Policy | Regex + priority | `"hybrid"` |
-| Experience | Regex + NER | `"3-5 years"`, `"senior"` |
-| Education | Regex patterns | `["BSc Computer Science"]` |
-| Benefits | Keyword matching | `["pension", "equity", "flexible hours"]` |
-| Domain | LLM (optional) | `"FinTech"` |
-| Culture | LLM (optional) | `["innovative", "fast-paced"]` |
+| Aspect        | Method              | Example Output                            |
+| ------------- | ------------------- | ----------------------------------------- |
+| Skills        | spaCy PhraseMatcher | `["Python", "SQL", "Power BI"]`           |
+| Tools         | spaCy PhraseMatcher | `["Docker", "Kubernetes", "AWS"]`         |
+| Language      | Regex patterns      | `["Dutch required", "English fluent"]`    |
+| Remote Policy | Regex + priority    | `"hybrid"`                                |
+| Experience    | Regex + NER         | `"3-5 years"`, `"senior"`                 |
+| Education     | Regex patterns      | `["BSc Computer Science"]`                |
+| Benefits      | Keyword matching    | `["pension", "equity", "flexible hours"]` |
+| Domain        | LLM (optional)      | `"FinTech"`                               |
+| Culture       | LLM (optional)      | `["innovative", "fast-paced"]`            |
 
 Entity normalization with rapidfuzz ensures `"JS"` / `"Javascript"` / `"JavaScript"` map to the same canonical form.
 
@@ -187,17 +212,17 @@ All agents use a shared ReAct loop (`src/agents/loop.py`) with OpenAI function c
 
 ### API (`src/api/`)
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/jobs` | List jobs with filtering and pagination |
-| `GET` | `/api/jobs/{id}` | Job detail with chunks |
-| `POST` | `/api/search` | Hybrid search with filters |
-| `GET` | `/api/clusters/{aspect}` | UMAP + HDBSCAN clusters for an aspect |
-| `POST` | `/api/clusters/concept` | Cluster by free-text concept |
-| `GET` | `/api/aspects` | List available aspects |
-| `GET` | `/api/aspects/{name}/distribution` | Value distribution for an aspect |
-| `WS` | `/api/chat` | WebSocket agentic chat |
-| `GET` | `/api/health` | Health check |
+| Method | Path                               | Description                             |
+| ------ | ---------------------------------- | --------------------------------------- |
+| `GET`  | `/api/jobs`                        | List jobs with filtering and pagination |
+| `GET`  | `/api/jobs/{id}`                   | Job detail with chunks                  |
+| `POST` | `/api/search`                      | Hybrid search with filters              |
+| `GET`  | `/api/clusters/{aspect}`           | UMAP + HDBSCAN clusters for an aspect   |
+| `POST` | `/api/clusters/concept`            | Cluster by free-text concept            |
+| `GET`  | `/api/aspects`                     | List available aspects                  |
+| `GET`  | `/api/aspects/{name}/distribution` | Value distribution for an aspect        |
+| `WS`   | `/api/chat`                        | WebSocket agentic chat                  |
+| `GET`  | `/api/health`                      | Health check                            |
 
 ### Frontend (`frontend/`)
 
