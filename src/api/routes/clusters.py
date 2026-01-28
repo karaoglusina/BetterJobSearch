@@ -105,8 +105,23 @@ def _generate_cluster_labels(
     job_ids: List[str],
     labels: np.ndarray,
     titles: List[str],
+    *,
+    tfidf_min_df: float = 0.0,
+    tfidf_max_df: float = 1.0,
+    meaningful_phrases: Optional[List[str]] = None,
 ) -> Dict[int, str]:
-    """Generate descriptive cluster labels using c-TF-IDF keywords."""
+    """Generate descriptive cluster labels using c-TF-IDF keywords.
+
+    Args:
+        chunks: All chunks.
+        job_map: Job ID to chunk indices mapping.
+        job_ids: List of job IDs.
+        labels: Cluster labels array.
+        titles: Job titles.
+        tfidf_min_df: Minimum document frequency ratio (0-1).
+        tfidf_max_df: Maximum document frequency ratio (0-1).
+        meaningful_phrases: Optional whitelist of domain-specific phrases.
+    """
     from ...clustering_v2.labeler import compute_ctfidf
 
     # Group chunk texts by cluster
@@ -126,7 +141,13 @@ def _generate_cluster_labels(
         return {}
 
     try:
-        keywords = compute_ctfidf(docs_per_cluster, top_n=5)
+        keywords = compute_ctfidf(
+            docs_per_cluster,
+            top_n=5,
+            min_df=tfidf_min_df,
+            max_df=tfidf_max_df,
+            meaningful_phrases=meaningful_phrases,
+        )
         return {
             cid: ", ".join(kws[:3]) if kws else f"Cluster {cid}"
             for cid, kws in keywords.items()
@@ -144,17 +165,27 @@ def _compute_clusters(
     n_neighbors: int = 15,
     min_dist: float = 0.1,
     min_cluster_size: Optional[int] = None,
+    tfidf_min_df: float = 0.0,
+    tfidf_max_df: float = 1.0,
+    meaningful_phrases: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Compute clusters synchronously (runs in thread pool)."""
     from ...clustering_v2.cache import ClusterCache
 
     # Build a cache key that includes custom params
-    has_custom_params = (n_neighbors != 15 or min_dist != 0.1 or min_cluster_size is not None)
+    has_custom_params = (
+        n_neighbors != 15 or min_dist != 0.1 or min_cluster_size is not None
+        or tfidf_min_df != 0.0 or tfidf_max_df != 1.0
+    )
     cache_key = aspect
     if has_custom_params:
         cache_key = f"{aspect}_nn{n_neighbors}_md{min_dist}"
         if min_cluster_size is not None:
             cache_key += f"_mc{min_cluster_size}"
+        if tfidf_min_df != 0.0:
+            cache_key += f"_tmin{tfidf_min_df}"
+        if tfidf_max_df != 1.0:
+            cache_key += f"_tmax{tfidf_max_df}"
 
     cache = ClusterCache()
 
@@ -200,7 +231,11 @@ def _compute_clusters(
     labels = cluster_hdbscan(coords, min_cluster_size=actual_min_cluster)
 
     # Generate descriptive labels using c-TF-IDF
-    label_map = _generate_cluster_labels(chunks, job_map, job_ids, labels, titles)
+    label_map = _generate_cluster_labels(
+        chunks, job_map, job_ids, labels, titles,
+        tfidf_min_df=tfidf_min_df, tfidf_max_df=tfidf_max_df,
+        meaningful_phrases=meaningful_phrases,
+    )
 
     cache.save(
         cache_key, job_ids, coords[:, 0].tolist(), coords[:, 1].tolist(),
@@ -276,6 +311,8 @@ async def get_clusters(
     n_neighbors: int = Query(15, ge=2, le=100),
     min_dist: float = Query(0.1, ge=0.0, le=1.0),
     min_cluster_size: Optional[int] = Query(None, ge=2, le=200),
+    tfidf_min_df: float = Query(0.0, ge=0.0, le=0.5, description="TF-IDF min document frequency ratio"),
+    tfidf_max_df: float = Query(1.0, ge=0.5, le=1.0, description="TF-IDF max document frequency ratio"),
 ) -> Dict[str, Any]:
     """Get cluster data for a specific aspect."""
     retriever = request.app.state.retriever
@@ -283,12 +320,18 @@ async def get_clusters(
         raise HTTPException(status_code=503, detail="Search artifacts not loaded")
 
     aspect_data = getattr(request.app.state, "aspect_data", {})
+    meaningful_phrases = getattr(request.app.state, "meaningful_phrases", None)
+    # Only use phrases if list is non-empty
+    if meaningful_phrases is not None and len(meaningful_phrases) == 0:
+        meaningful_phrases = None
 
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(
         None, partial(
             _compute_clusters, retriever.chunks, retriever.faiss_index, aspect, aspect_data,
             n_neighbors=n_neighbors, min_dist=min_dist, min_cluster_size=min_cluster_size,
+            tfidf_min_df=tfidf_min_df, tfidf_max_df=tfidf_max_df,
+            meaningful_phrases=meaningful_phrases,
         )
     )
 

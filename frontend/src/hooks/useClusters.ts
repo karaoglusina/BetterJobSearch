@@ -5,6 +5,8 @@ export interface ClusterParams {
   n_neighbors?: number;
   min_dist?: number;
   min_cluster_size?: number;
+  tfidf_min_df?: number;
+  tfidf_max_df?: number;
 }
 
 export function useClusters() {
