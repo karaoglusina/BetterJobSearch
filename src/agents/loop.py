@@ -6,6 +6,9 @@ import json
 import os
 from typing import Any, Callable, Dict, List, Optional
 
+# Ensure .env is loaded by importing config
+from ..config import OPENAI_API_KEY as CONFIG_OPENAI_API_KEY
+
 from ..models.agent import AgentResult, ToolCall
 
 
@@ -48,11 +51,17 @@ def react_loop(
             model=model,
         )
 
-    if not os.environ.get("OPENAI_API_KEY"):
+    # Check both os.environ and config (config loads from .env file)
+    api_key = os.environ.get("OPENAI_API_KEY") or CONFIG_OPENAI_API_KEY
+    if not api_key:
         return AgentResult(
-            answer="OPENAI_API_KEY not set. Cannot run agent.",
+            answer="OPENAI_API_KEY not set. Cannot run agent. Please set it in .env file or as environment variable.",
             model=model,
         )
+    
+    # Ensure OpenAI client can access the key
+    if not os.environ.get("OPENAI_API_KEY"):
+        os.environ["OPENAI_API_KEY"] = api_key
 
     client = OpenAI()
 

@@ -2,11 +2,11 @@ import React, { useRef, useEffect, useState } from 'react';
 import { useWebSocket, ChatMessage } from '../hooks/useWebSocket';
 
 interface ChatPanelProps {
-  onJobHighlight?: (jobIds: string[]) => void;
+  onSetJobs?: (jobIds: string[]) => void;
 }
 
-export default function ChatPanel({ onJobHighlight }: ChatPanelProps) {
-  const { messages, sendMessage, resetChat, isConnected, isLoading } = useWebSocket();
+export default function ChatPanel({ onSetJobs }: ChatPanelProps) {
+  const { messages, sendMessage, resetChat, isConnected, isLoading } = useWebSocket(onSetJobs);
   const [input, setInput] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -47,7 +47,24 @@ export default function ChatPanel({ onJobHighlight }: ChatPanelProps) {
 
       {/* Messages */}
       <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
-        {messages.length === 0 && (
+        {!isConnected && (
+          <div style={{
+            color: 'var(--text-secondary)',
+            fontSize: 13,
+            textAlign: 'center',
+            marginTop: 40,
+            padding: 12,
+            background: 'var(--bg-tertiary)',
+            borderRadius: 6,
+          }}>
+            Connecting to chat server...
+            <br />
+            <span style={{ fontSize: 11, opacity: 0.7 }}>
+              Make sure the backend is running on port 8000
+            </span>
+          </div>
+        )}
+        {isConnected && messages.length === 0 && (
           <div style={{ color: 'var(--text-secondary)', fontSize: 13, textAlign: 'center', marginTop: 40 }}>
             Ask about jobs, compare positions, or explore the market.
           </div>
@@ -95,6 +112,25 @@ export default function ChatPanel({ onJobHighlight }: ChatPanelProps) {
 
 function MessageBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === 'user';
+  const isSystem = message.role === 'system';
+  const isError = isSystem && message.content.startsWith('Error:');
+  const isTool = isSystem && message.content.startsWith('Using tool:');
+
+  // Tool call messages are compact inline indicators
+  if (isTool) {
+    return (
+      <div style={{
+        marginBottom: 4,
+        fontSize: 11,
+        color: 'var(--text-secondary)',
+        opacity: 0.7,
+        paddingLeft: 4,
+      }}>
+        {message.content}
+      </div>
+    );
+  }
+
   return (
     <div style={{
       marginBottom: 12,
@@ -103,9 +139,15 @@ function MessageBubble({ message }: { message: ChatMessage }) {
     }}>
       <div style={{
         maxWidth: '85%', padding: '8px 12px', borderRadius: 8,
-        background: isUser ? 'var(--accent)' : 'var(--bg-tertiary)',
-        color: 'var(--text-primary)', fontSize: 13, lineHeight: 1.5,
+        background: isUser
+          ? 'var(--accent)'
+          : isError
+            ? 'rgba(239, 68, 68, 0.15)'
+            : 'var(--bg-tertiary)',
+        color: isError ? 'var(--error)' : 'var(--text-primary)',
+        fontSize: 13, lineHeight: 1.5,
         whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+        border: isError ? '1px solid rgba(239, 68, 68, 0.3)' : 'none',
       }}>
         {message.content}
         {message.toolCalls && message.toolCalls.length > 0 && (

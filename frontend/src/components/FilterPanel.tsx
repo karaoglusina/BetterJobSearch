@@ -1,19 +1,31 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { api } from '../api/client';
 
 interface FilterPanelProps {
-  onFilterChange: (filters: { location?: string; company?: string; title_contains?: string }) => void;
+  onFilterChange: (filters: { location?: string; company?: string; title_contains?: string; language?: string }) => void;
+  onKeywordSearch?: (query: string) => void;
+  keywordSearchLoading?: boolean;
+  jobSource?: string;
 }
 
-export default function FilterPanel({ onFilterChange }: FilterPanelProps) {
+export default function FilterPanel({ onFilterChange, onKeywordSearch, keywordSearchLoading, jobSource }: FilterPanelProps) {
   const [location, setLocation] = useState('');
   const [company, setCompany] = useState('');
   const [titleContains, setTitleContains] = useState('');
+  const [language, setLanguage] = useState('');
+  const [keywordQuery, setKeywordQuery] = useState('');
+  const [languages, setLanguages] = useState<{ code: string; count: number }[]>([]);
+
+  useEffect(() => {
+    api.getLanguages().then((data) => setLanguages(data.languages)).catch(() => {});
+  }, []);
 
   const apply = () => {
     onFilterChange({
       location: location || undefined,
       company: company || undefined,
       title_contains: titleContains || undefined,
+      language: language || undefined,
     });
   };
 
@@ -21,11 +33,85 @@ export default function FilterPanel({ onFilterChange }: FilterPanelProps) {
     setLocation('');
     setCompany('');
     setTitleContains('');
+    setLanguage('');
     onFilterChange({});
+  };
+
+  const handleKeywordSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (keywordQuery.trim() && onKeywordSearch) {
+      onKeywordSearch(keywordQuery.trim());
+    }
+  };
+
+  const clearKeywordSearch = () => {
+    setKeywordQuery('');
+    onFilterChange({
+      location: location || undefined,
+      company: company || undefined,
+      title_contains: titleContains || undefined,
+      language: language || undefined,
+    });
   };
 
   return (
     <div style={{ padding: 12 }}>
+      {/* Keyword Search Section */}
+      {onKeywordSearch && (
+        <>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            Keyword Search
+          </div>
+          {jobSource === 'agent' && (
+            <div style={{ fontSize: 10, color: 'var(--accent)', marginBottom: 6, opacity: 0.8 }}>
+              Agent results active — searching will override
+            </div>
+          )}
+          <form onSubmit={handleKeywordSearch} style={{ marginBottom: 12 }}>
+            <textarea
+              value={keywordQuery}
+              onChange={(e) => setKeywordQuery(e.target.value)}
+              placeholder={'e.g. ("data engineer" AND python) OR spark'}
+              style={{
+                ...inputStyle,
+                width: '100%',
+                height: 64,
+                resize: 'vertical',
+                fontFamily: 'inherit',
+                boxSizing: 'border-box',
+              }}
+            />
+            <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+              <button
+                type="submit"
+                disabled={!keywordQuery.trim() || keywordSearchLoading}
+                style={{
+                  flex: 1, padding: '6px', borderRadius: 6, border: 'none',
+                  background: 'var(--accent)', color: 'white', fontSize: 12, cursor: 'pointer',
+                  opacity: (!keywordQuery.trim() || keywordSearchLoading) ? 0.5 : 1,
+                }}
+              >
+                {keywordSearchLoading ? 'Searching...' : 'Search'}
+              </button>
+              <button
+                type="button"
+                onClick={clearKeywordSearch}
+                style={{
+                  padding: '6px 12px', borderRadius: 6, border: '1px solid var(--border)',
+                  background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, cursor: 'pointer',
+                }}
+              >
+                Clear
+              </button>
+            </div>
+            <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4, opacity: 0.7 }}>
+              Supports AND, OR, NOT, "quoted phrases", (parentheses)
+            </div>
+          </form>
+          <div style={{ borderTop: '1px solid var(--border)', marginBottom: 12 }} />
+        </>
+      )}
+
       <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
         Filters
       </div>
@@ -49,6 +135,20 @@ export default function FilterPanel({ onFilterChange }: FilterPanelProps) {
           onKeyDown={(e) => e.key === 'Enter' && apply()}
           style={inputStyle}
         />
+        {languages.length > 0 && (
+          <select
+            value={language}
+            onChange={(e) => { setLanguage(e.target.value); }}
+            style={{ ...inputStyle, cursor: 'pointer' }}
+          >
+            <option value="">All languages</option>
+            {languages.map((l) => (
+              <option key={l.code} value={l.code}>
+                {l.code} ({l.count})
+              </option>
+            ))}
+          </select>
+        )}
 
         <div style={{ display: 'flex', gap: 6 }}>
           <button onClick={apply} style={{

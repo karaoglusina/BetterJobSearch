@@ -16,7 +16,10 @@
       "Bash(do if [ -d \"$d\" ])",
       "Bash(then rm -rf \"$d\")",
       "Bash(ls:*)",
-      "Bash(uv cache clean:*)"
+      "Bash(uv cache clean:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx vite build:*)",
+      "Bash(pip install:*)"
     ]
   }
 }

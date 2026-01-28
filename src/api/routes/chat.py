@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
-from typing import Any, Dict
+import re
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -53,36 +55,56 @@ async def chat_websocket(websocket: WebSocket):
 
             # Initialize coordinator lazily
             if coordinator is None:
-                from ...agents.coordinator import Coordinator
-                coordinator = Coordinator()
+                try:
+                    from ...agents.coordinator import Coordinator
+                    coordinator = Coordinator()
+                except Exception as e:
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": f"Failed to initialize chat agent: {e}",
+                    })
+                    continue
 
-            # Define callbacks for streaming events
-            async def on_tool_call(tc):
-                await websocket.send_json({
-                    "type": "tool_call",
+            # Run coordinator in thread pool to avoid blocking the event loop.
+            # Tool call callbacks are collected and sent after completion since
+            # the coordinator runs synchronously in a separate thread.
+            loop = asyncio.get_event_loop()
+            tool_call_log = []
+
+            def on_tool_call(tc):
+                tool_call_log.append({
                     "tool": tc.tool_name,
                     "args": tc.arguments,
                     "result": str(tc.result)[:500] if tc.result else "",
                     "error": tc.error,
                 })
 
-            async def on_intent(intent):
-                await websocket.send_json({
-                    "type": "intent",
-                    "intent": intent.intent,
-                    "confidence": intent.confidence,
-                })
-
-            # Run coordinator (sync — runs in thread pool)
-            import asyncio
-
             def _run():
                 return coordinator.handle(
                     content,
-                    on_tool_call=lambda tc: asyncio.run(on_tool_call(tc)) if False else None,
+                    on_tool_call=on_tool_call,
                 )
 
-            result = await asyncio.get_event_loop().run_in_executor(None, _run)
+            try:
+                result = await loop.run_in_executor(None, _run)
+            except Exception as e:
+                await websocket.send_json({"type": "error", "message": str(e)})
+                continue
+
+            # Extract job IDs from tool call results
+            if not result.job_ids_referenced:
+                extracted_ids: List[str] = []
+                for tc in result.tool_calls:
+                    if tc.result:
+                        m = re.search(r"\[JOB_IDS:([^\]]+)\]", str(tc.result))
+                        if m:
+                            extracted_ids.extend(m.group(1).split(","))
+                if extracted_ids:
+                    result.job_ids_referenced = extracted_ids
+
+            # Send tool call events that were collected during execution
+            for tc_data in tool_call_log:
+                await websocket.send_json({"type": "tool_call", **tc_data})
 
             # Send answer
             await websocket.send_json({
@@ -102,6 +124,14 @@ async def chat_websocket(websocket: WebSocket):
                 await websocket.send_json({
                     "type": "ui_action",
                     **action,
+                })
+
+            # Auto-emit set_jobs action when agent references specific jobs
+            if result.job_ids_referenced:
+                await websocket.send_json({
+                    "type": "ui_action",
+                    "action": "set_jobs",
+                    "job_ids": result.job_ids_referenced,
                 })
 
     except WebSocketDisconnect:

@@ -1,21 +1,33 @@
-import React, { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import ScatterPlot from './components/ScatterPlot';
 import JobTable from './components/JobTable';
 import ChatPanel from './components/ChatPanel';
 import AspectSelector from './components/AspectSelector';
 import JobDetail from './components/JobDetail';
 import FilterPanel from './components/FilterPanel';
+import ClusterSettings from './components/ClusterSettings';
+import PresetBar, { UIPreset } from './components/PresetBar';
 import { useJobs } from './hooks/useJobs';
-import { useClusters } from './hooks/useClusters';
+import { useClusters, ClusterParams } from './hooks/useClusters';
 
 type View = 'scatter' | 'table';
 
 export default function App() {
-  const { jobs, totalJobs, loading: jobsLoading, fetchJobs } = useJobs();
+  const {
+    jobs, totalJobs, fetchJobs,
+    keywordSearch, keywordSearchLoading, keywordSearchActive,
+    jobSource, setJobsFromExternal,
+  } = useJobs();
   const { clusterData, currentAspect, loading: clusterLoading, fetchClusters, clusterByConcept } = useClusters();
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [highlightedJobs, setHighlightedJobs] = useState<Set<string>>(new Set());
   const [view, setView] = useState<View>('scatter');
+  const [clusterFilterEnabled, setClusterFilterEnabled] = useState(true);
+
+  const filterJobIds = useMemo(() => {
+    if (!keywordSearchActive || !clusterFilterEnabled) return undefined;
+    return new Set(jobs.map((j) => j.job_id));
+  }, [jobs, keywordSearchActive, clusterFilterEnabled]);
 
   const handleAspectSelect = useCallback((aspect: string) => {
     fetchClusters(aspect);
@@ -31,14 +43,48 @@ export default function App() {
     setHighlightedJobs(new Set([jobId]));
   }, []);
 
-  const handleFilterChange = useCallback((filters: { location?: string; company?: string; title_contains?: string }) => {
+  const handleFilterChange = useCallback((filters: { location?: string; company?: string; title_contains?: string; language?: string }) => {
     fetchJobs({ limit: 50, ...filters });
   }, [fetchJobs]);
+
+  const handleKeywordSearch = useCallback((query: string) => {
+    keywordSearch(query);
+    // Switch to table view to see keyword search results
+    setView('table');
+  }, [keywordSearch]);
+
+  const handleClusterParamsApply = useCallback((params: ClusterParams) => {
+    fetchClusters(currentAspect, params);
+  }, [fetchClusters, currentAspect]);
+
+  const handleAgentSetJobs = useCallback(async (jobIds: string[]) => {
+    if (!jobIds.length) return;
+    try {
+      const { api } = await import('./api/client');
+      const data = await api.getJobsBatch(jobIds);
+      setJobsFromExternal(data.jobs, 'agent');
+      setView('table');
+    } catch (e) {
+      console.error('Failed to load agent jobs:', e);
+    }
+  }, [setJobsFromExternal]);
 
   const handleCloseDetail = useCallback(() => {
     setSelectedJobId(null);
     setHighlightedJobs(new Set());
   }, []);
+
+  const handleRestorePreset = useCallback((preset: UIPreset) => {
+    fetchClusters(preset.aspect);
+    setView(preset.view);
+    setClusterFilterEnabled(preset.clusterFilterEnabled);
+  }, [fetchClusters]);
+
+  const currentPresetState = useMemo(() => ({
+    aspect: currentAspect,
+    view,
+    clusterFilterEnabled,
+  }), [currentAspect, view, clusterFilterEnabled]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
@@ -49,8 +95,24 @@ export default function App() {
         background: 'var(--bg-secondary)',
       }}>
         <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>BetterJobSearch</h1>
-        <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-          {totalJobs} jobs loaded
+        <PresetBar currentState={currentPresetState} onRestore={handleRestorePreset} />
+        <div style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          {totalJobs} jobs
+          {jobSource === 'keyword' && <span style={{ color: 'var(--accent)', fontSize: 11 }}>keyword search</span>}
+          {jobSource === 'agent' && <span style={{ color: '#22c55e', fontSize: 11 }}>agent results</span>}
+          {jobSource === 'filter' && <span style={{ color: 'var(--text-secondary)', fontSize: 11 }}>filtered</span>}
+          {jobSource !== 'default' && (
+            <button
+              onClick={() => fetchJobs({ limit: 50 })}
+              style={{
+                background: 'transparent', border: '1px solid var(--border)',
+                color: 'var(--text-secondary)', padding: '2px 6px', borderRadius: 4,
+                cursor: 'pointer', fontSize: 10,
+              }}
+            >
+              Show all
+            </button>
+          )}
         </div>
       </header>
 
@@ -69,7 +131,14 @@ export default function App() {
             loading={clusterLoading}
           />
           <div style={{ borderTop: '1px solid var(--border)' }} />
-          <FilterPanel onFilterChange={handleFilterChange} />
+          <ClusterSettings onApply={handleClusterParamsApply} loading={clusterLoading} />
+          <div style={{ borderTop: '1px solid var(--border)' }} />
+          <FilterPanel
+            onFilterChange={handleFilterChange}
+            onKeywordSearch={handleKeywordSearch}
+            keywordSearchLoading={keywordSearchLoading}
+            jobSource={jobSource}
+          />
         </aside>
 
         {/* Center content */}
@@ -77,7 +146,7 @@ export default function App() {
           {/* View toggle */}
           <div style={{
             padding: '8px 16px', borderBottom: '1px solid var(--border)',
-            display: 'flex', gap: 8,
+            display: 'flex', gap: 8, alignItems: 'center',
           }}>
             <button
               onClick={() => setView('scatter')}
@@ -104,9 +173,20 @@ export default function App() {
               Table
             </button>
             {clusterLoading && (
-              <span style={{ color: 'var(--text-secondary)', fontSize: 12, marginLeft: 8, lineHeight: '28px' }}>
+              <span style={{ color: 'var(--text-secondary)', fontSize: 12, marginLeft: 8 }}>
                 Loading clusters...
               </span>
+            )}
+            {keywordSearchActive && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 8, fontSize: 12, color: 'var(--accent)', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={clusterFilterEnabled}
+                  onChange={(e) => setClusterFilterEnabled(e.target.checked)}
+                  style={{ accentColor: 'var(--accent)' }}
+                />
+                Filter clusters by search
+              </label>
             )}
           </div>
 
@@ -118,6 +198,8 @@ export default function App() {
                 aspect={currentAspect}
                 onPointClick={handlePointClick}
                 highlightedJobs={highlightedJobs}
+                filterJobIds={filterJobIds}
+                filterActive={keywordSearchActive && clusterFilterEnabled}
               />
             ) : (
               <JobTable
@@ -134,7 +216,7 @@ export default function App() {
 
         {/* Right chat panel */}
         <aside style={{ width: 340 }}>
-          <ChatPanel />
+          <ChatPanel onSetJobs={handleAgentSetJobs} />
         </aside>
       </div>
     </div>

@@ -30,6 +30,60 @@ async def lifespan(app: FastAPI):
         print("No search artifacts found. Run 'python -m src.pipeline build' first.")
         app.state.retriever = None
 
+    # Pre-load embedding model so first requests don't trigger concurrent loads
+    if app.state.retriever is not None:
+        try:
+            from ..search.embedder import get_model
+            print("Pre-loading embedding model...")
+            get_model()
+            print("Embedding model ready.")
+        except Exception as e:
+            print(f"Warning: Could not pre-load embedding model: {e}")
+
+    # Load aspect data for aspect-based clustering
+    aspects_path = ARTIFACTS_DIR / "aspects.jsonl"
+    if aspects_path.exists():
+        import json
+        aspect_data = {}
+        with open(aspects_path, "r", encoding="utf-8") as f:
+            for line in f:
+                rec = json.loads(line)
+                aspect_data[rec["job_id"]] = rec.get("aspects", {})
+        app.state.aspect_data = aspect_data
+        print(f"Loaded aspect data for {len(aspect_data)} jobs")
+    else:
+        app.state.aspect_data = {}
+
+    # Detect language for each job
+    app.state.job_languages = {}
+    if app.state.retriever is not None:
+        try:
+            from langdetect import detect, DetectorFactory
+            DetectorFactory.seed = 0  # reproducible results
+            print("Detecting job languages...")
+            chunks = app.state.retriever.chunks
+            # Group first chunk text per job
+            job_texts: dict[str, str] = {}
+            for ch in chunks:
+                jk = ch.get("job_key", "")
+                if jk and jk not in job_texts:
+                    job_texts[jk] = ch.get("text", "")[:500]
+            job_languages: dict[str, str] = {}
+            for jk, text in job_texts.items():
+                try:
+                    job_languages[jk] = detect(text)
+                except Exception:
+                    job_languages[jk] = "unknown"
+            app.state.job_languages = job_languages
+            lang_counts: dict[str, int] = {}
+            for lang in job_languages.values():
+                lang_counts[lang] = lang_counts.get(lang, 0) + 1
+            print(f"Detected languages for {len(job_languages)} jobs: {dict(sorted(lang_counts.items(), key=lambda x: -x[1])[:10])}")
+        except ImportError:
+            print("Warning: langdetect not installed, skipping language detection")
+        except Exception as e:
+            print(f"Warning: Language detection failed: {e}")
+
     # Initialize coordinator (lazy - only if OpenAI available)
     app.state.coordinator = None
 
@@ -69,6 +123,24 @@ def create_app() -> FastAPI:
     app.include_router(clusters.router, prefix="/api")
     app.include_router(aspects.router, prefix="/api")
     app.include_router(chat.router, prefix="/api")
+
+    @app.get("/")
+    async def root():
+        """Root endpoint with API information."""
+        return {
+            "name": "BetterJobSearch API",
+            "version": "2.0.0",
+            "status": "running",
+            "docs": "/docs",
+            "health": "/api/health",
+            "endpoints": {
+                "jobs": "/api/jobs",
+                "search": "/api/search",
+                "clusters": "/api/clusters",
+                "aspects": "/api/aspects",
+                "chat": "/api/chat (WebSocket)",
+            },
+        }
 
     @app.get("/api/health")
     async def health():

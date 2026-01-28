@@ -6,6 +6,9 @@ import json
 import os
 from typing import Any, Callable, Dict, List, Optional
 
+# Ensure .env is loaded by importing config
+from ..config import OPENAI_API_KEY as CONFIG_OPENAI_API_KEY
+
 from ..models.agent import AgentResult, IntentClassification
 from .memory import ConversationMemory
 from .tools.registry import get_default_registry, ToolRegistry
@@ -101,8 +104,14 @@ class Coordinator:
 
     def _classify_intent(self, message: str) -> IntentClassification:
         """Classify user intent using LLM."""
-        if not os.environ.get("OPENAI_API_KEY"):
+        # Check both os.environ and config (config loads from .env file)
+        api_key = os.environ.get("OPENAI_API_KEY") or CONFIG_OPENAI_API_KEY
+        if not api_key:
             return self._classify_heuristic(message)
+
+        # Ensure OpenAI client can access the key
+        if not os.environ.get("OPENAI_API_KEY"):
+            os.environ["OPENAI_API_KEY"] = api_key
 
         try:
             from openai import OpenAI

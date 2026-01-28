@@ -51,7 +51,6 @@ artifacts/cluster_cache/
 data/offline_*.json*
 data/*.parquet
 data/job_group_embeddings.parquet
-data/sample_jobs.json
 
 meta/
 

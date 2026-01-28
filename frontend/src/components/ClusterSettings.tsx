@@ -1,0 +1,108 @@
+import React, { useState } from 'react';
+import type { ClusterParams } from '../hooks/useClusters';
+
+interface ClusterSettingsProps {
+  onApply: (params: ClusterParams) => void;
+  loading?: boolean;
+}
+
+export default function ClusterSettings({ onApply, loading }: ClusterSettingsProps) {
+  const [expanded, setExpanded] = useState(false);
+  const [nNeighbors, setNNeighbors] = useState(15);
+  const [minDist, setMinDist] = useState(0.1);
+  const [minClusterSize, setMinClusterSize] = useState(0); // 0 = auto
+
+  const handleApply = () => {
+    onApply({
+      n_neighbors: nNeighbors,
+      min_dist: minDist,
+      min_cluster_size: minClusterSize > 0 ? minClusterSize : undefined,
+    });
+  };
+
+  const handleReset = () => {
+    setNNeighbors(15);
+    setMinDist(0.1);
+    setMinClusterSize(0);
+    onApply({});
+  };
+
+  return (
+    <div style={{ padding: '8px 12px' }}>
+      <button
+        onClick={() => setExpanded(!expanded)}
+        style={{
+          background: 'transparent', border: 'none', color: 'var(--text-secondary)',
+          fontSize: 12, cursor: 'pointer', padding: 0, width: '100%', textAlign: 'left',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.5px',
+        }}
+      >
+        Cluster Settings
+        <span style={{ fontSize: 10 }}>{expanded ? '\u25B2' : '\u25BC'}</span>
+      </button>
+
+      {expanded && (
+        <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div>
+            <label style={labelStyle}>
+              Density (n_neighbors): {nNeighbors}
+            </label>
+            <input
+              type="range" min={2} max={50} value={nNeighbors}
+              onChange={(e) => setNNeighbors(Number(e.target.value))}
+              style={sliderStyle}
+            />
+          </div>
+
+          <div>
+            <label style={labelStyle}>
+              Spread (min_dist): {minDist.toFixed(2)}
+            </label>
+            <input
+              type="range" min={0} max={100} value={Math.round(minDist * 100)}
+              onChange={(e) => setMinDist(Number(e.target.value) / 100)}
+              style={sliderStyle}
+            />
+          </div>
+
+          <div>
+            <label style={labelStyle}>
+              Min cluster size: {minClusterSize === 0 ? 'auto' : minClusterSize}
+            </label>
+            <input
+              type="range" min={0} max={50} value={minClusterSize}
+              onChange={(e) => setMinClusterSize(Number(e.target.value))}
+              style={sliderStyle}
+            />
+          </div>
+
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button onClick={handleApply} disabled={loading} style={{
+              flex: 1, padding: '5px', borderRadius: 6, border: 'none',
+              background: 'var(--accent)', color: 'white', fontSize: 11,
+              cursor: 'pointer', opacity: loading ? 0.5 : 1,
+            }}>
+              Apply
+            </button>
+            <button onClick={handleReset} style={{
+              padding: '5px 10px', borderRadius: 6, border: '1px solid var(--border)',
+              background: 'transparent', color: 'var(--text-secondary)', fontSize: 11,
+              cursor: 'pointer',
+            }}>
+              Reset
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const labelStyle: React.CSSProperties = {
+  fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 2,
+};
+
+const sliderStyle: React.CSSProperties = {
+  width: '100%', accentColor: 'var(--accent)', height: 4,
+};
