@@ -16,6 +16,9 @@ def compute_ctfidf(
     documents_per_cluster: Dict[int, List[str]],
     *,
     top_n: int = 10,
+    min_df: float = 0.0,
+    max_df: float = 1.0,
+    meaningful_phrases: Optional[List[str]] = None,
 ) -> Dict[int, List[str]]:
     """Compute class-based TF-IDF (c-TF-IDF) keywords per cluster.
 
@@ -25,6 +28,11 @@ def compute_ctfidf(
     Args:
         documents_per_cluster: Mapping of cluster_id -> list of document texts.
         top_n: Number of top terms per cluster.
+        min_df: Minimum document frequency ratio (0.0 to 1.0). Terms appearing
+            in fewer than min_df * n_documents are ignored.
+        max_df: Maximum document frequency ratio (0.0 to 1.0). Terms appearing
+            in more than max_df * n_documents are ignored.
+        meaningful_phrases: Optional whitelist of phrases to prefer.
 
     Returns:
         Dict of cluster_id -> list of top keywords.
@@ -42,20 +50,51 @@ def compute_ctfidf(
     # Concatenate documents per cluster
     class_docs = [" ".join(documents_per_cluster.get(cid, [""])) for cid in cluster_ids]
 
+    # Convert min_df/max_df from ratio to appropriate format
+    # TfidfVectorizer accepts float (proportion) or int (absolute count)
     vectorizer = TfidfVectorizer(
         max_features=10000,
         ngram_range=(1, 2),
         stop_words="english",
         lowercase=True,
+        min_df=max(min_df, 0.0),  # Ensure non-negative
+        max_df=min(max_df, 1.0),  # Ensure <= 1.0
     )
-    tfidf_matrix = vectorizer.fit_transform(class_docs)
+
+    try:
+        tfidf_matrix = vectorizer.fit_transform(class_docs)
+    except ValueError:
+        # Empty vocabulary, return empty results
+        return {cid: [] for cid in cluster_ids}
+
     feature_names = vectorizer.get_feature_names_out()
+
+    # Build phrase set for filtering if provided
+    phrase_set = set(meaningful_phrases) if meaningful_phrases else None
 
     result: Dict[int, List[str]] = {}
     for i, cid in enumerate(cluster_ids):
         row = np.asarray(tfidf_matrix[i].todense()).ravel()
-        top_indices = np.argsort(row)[::-1][:top_n]
-        result[cid] = [str(feature_names[j]) for j in top_indices if row[j] > 0]
+        top_indices = np.argsort(row)[::-1]
+
+        keywords = []
+        for j in top_indices:
+            if row[j] <= 0:
+                break
+            term = str(feature_names[j])
+            # If phrase whitelist is provided, prefer those terms
+            if phrase_set is not None and len(keywords) < top_n:
+                if term in phrase_set or any(term in p for p in phrase_set):
+                    keywords.append(term)
+                elif len(keywords) < top_n // 2:
+                    # Allow some non-whitelisted terms
+                    keywords.append(term)
+            else:
+                keywords.append(term)
+            if len(keywords) >= top_n:
+                break
+
+        result[cid] = keywords
 
     return result
 

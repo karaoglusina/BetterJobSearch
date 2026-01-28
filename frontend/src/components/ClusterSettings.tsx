@@ -11,12 +11,16 @@ export default function ClusterSettings({ onApply, loading }: ClusterSettingsPro
   const [nNeighbors, setNNeighbors] = useState(15);
   const [minDist, setMinDist] = useState(0.1);
   const [minClusterSize, setMinClusterSize] = useState(0); // 0 = auto
+  const [tfidfMinDf, setTfidfMinDf] = useState(0); // 0 = no filter
+  const [tfidfMaxDf, setTfidfMaxDf] = useState(100); // 100 = no filter (100% = 1.0)
 
   const handleApply = () => {
     onApply({
       n_neighbors: nNeighbors,
       min_dist: minDist,
       min_cluster_size: minClusterSize > 0 ? minClusterSize : undefined,
+      tfidf_min_df: tfidfMinDf > 0 ? tfidfMinDf / 100 : undefined,
+      tfidf_max_df: tfidfMaxDf < 100 ? tfidfMaxDf / 100 : undefined,
     });
   };
 
@@ -24,6 +28,8 @@ export default function ClusterSettings({ onApply, loading }: ClusterSettingsPro
     setNNeighbors(15);
     setMinDist(0.1);
     setMinClusterSize(0);
+    setTfidfMinDf(0);
+    setTfidfMaxDf(100);
     onApply({});
   };
 
@@ -75,6 +81,40 @@ export default function ClusterSettings({ onApply, loading }: ClusterSettingsPro
               onChange={(e) => setMinClusterSize(Number(e.target.value))}
               style={sliderStyle}
             />
+          </div>
+
+          <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+            <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 6, textTransform: 'uppercase' }}>
+              Label Filters (TF-IDF)
+            </div>
+          </div>
+
+          <div>
+            <label style={labelStyle}>
+              Min doc freq: {tfidfMinDf === 0 ? 'off' : `${tfidfMinDf}%`}
+            </label>
+            <input
+              type="range" min={0} max={20} step={1} value={tfidfMinDf}
+              onChange={(e) => setTfidfMinDf(Number(e.target.value))}
+              style={sliderStyle}
+            />
+            <div style={{ fontSize: 9, color: 'var(--text-secondary)', opacity: 0.7 }}>
+              Ignore rare words (appearing in fewer docs)
+            </div>
+          </div>
+
+          <div>
+            <label style={labelStyle}>
+              Max doc freq: {tfidfMaxDf === 100 ? 'off' : `${tfidfMaxDf}%`}
+            </label>
+            <input
+              type="range" min={50} max={100} step={5} value={tfidfMaxDf}
+              onChange={(e) => setTfidfMaxDf(Number(e.target.value))}
+              style={sliderStyle}
+            />
+            <div style={{ fontSize: 9, color: 'var(--text-secondary)', opacity: 0.7 }}>
+              Ignore common words (appearing in many docs)
+            </div>
           </div>
 
           <div style={{ display: 'flex', gap: 6 }}>

@@ -89,11 +89,13 @@ export const api = {
       body: JSON.stringify({ query, fields, limit }),
     }),
 
-  getClusters: (aspect = 'default', params?: { n_neighbors?: number; min_dist?: number; min_cluster_size?: number }) => {
+  getClusters: (aspect = 'default', params?: { n_neighbors?: number; min_dist?: number; min_cluster_size?: number; tfidf_min_df?: number; tfidf_max_df?: number }) => {
     const searchParams = new URLSearchParams();
     if (params?.n_neighbors !== undefined) searchParams.set('n_neighbors', String(params.n_neighbors));
     if (params?.min_dist !== undefined) searchParams.set('min_dist', String(params.min_dist));
     if (params?.min_cluster_size !== undefined) searchParams.set('min_cluster_size', String(params.min_cluster_size));
+    if (params?.tfidf_min_df !== undefined) searchParams.set('tfidf_min_df', String(params.tfidf_min_df));
+    if (params?.tfidf_max_df !== undefined) searchParams.set('tfidf_max_df', String(params.tfidf_max_df));
     const qs = searchParams.toString();
     return fetchJson<{ aspect: string; n_jobs: number; data: ClusterPoint[] }>(`/clusters/${aspect}${qs ? `?${qs}` : ''}`);
   },

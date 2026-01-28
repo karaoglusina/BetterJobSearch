@@ -54,35 +54,31 @@ async def lifespan(app: FastAPI):
     else:
         app.state.aspect_data = {}
 
-    # Detect language for each job
-    app.state.job_languages = {}
+    # Load meaningful phrases for cluster labeling (if available)
+    phrases_path = ARTIFACTS_DIR / "meaningful_phrases.json"
+    if phrases_path.exists():
+        import json
+        with open(phrases_path, "r", encoding="utf-8") as f:
+            phrases_data = json.load(f)
+        app.state.meaningful_phrases = phrases_data.get("phrases", [])
+        print(f"Loaded {len(app.state.meaningful_phrases)} meaningful phrases for cluster labeling")
+    else:
+        app.state.meaningful_phrases = []
+
+    # Summarize languages from chunk metadata (language is now stored during build)
     if app.state.retriever is not None:
-        try:
-            from langdetect import detect, DetectorFactory
-            DetectorFactory.seed = 0  # reproducible results
-            print("Detecting job languages...")
-            chunks = app.state.retriever.chunks
-            # Group first chunk text per job
-            job_texts: dict[str, str] = {}
-            for ch in chunks:
-                jk = ch.get("job_key", "")
-                if jk and jk not in job_texts:
-                    job_texts[jk] = ch.get("text", "")[:500]
-            job_languages: dict[str, str] = {}
-            for jk, text in job_texts.items():
-                try:
-                    job_languages[jk] = detect(text)
-                except Exception:
-                    job_languages[jk] = "unknown"
-            app.state.job_languages = job_languages
-            lang_counts: dict[str, int] = {}
-            for lang in job_languages.values():
+        seen_jobs: set = set()
+        lang_counts: dict[str, int] = {}
+        for ch in app.state.retriever.chunks:
+            jk = ch.get("job_key", "")
+            if jk in seen_jobs:
+                continue
+            seen_jobs.add(jk)
+            lang = ch.get("meta", {}).get("language", "")
+            if lang:
                 lang_counts[lang] = lang_counts.get(lang, 0) + 1
-            print(f"Detected languages for {len(job_languages)} jobs: {dict(sorted(lang_counts.items(), key=lambda x: -x[1])[:10])}")
-        except ImportError:
-            print("Warning: langdetect not installed, skipping language detection")
-        except Exception as e:
-            print(f"Warning: Language detection failed: {e}")
+        if lang_counts:
+            print(f"Languages in corpus ({len(seen_jobs)} jobs): {dict(sorted(lang_counts.items(), key=lambda x: -x[1])[:10])}")
 
     # Initialize coordinator (lazy - only if OpenAI available)
     app.state.coordinator = None

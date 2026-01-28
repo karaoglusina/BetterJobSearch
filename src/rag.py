@@ -53,6 +53,14 @@ from rank_bm25 import BM25Okapi
 from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
 
+# Language detection
+try:
+    from langdetect import detect as langdetect_detect, DetectorFactory
+    DetectorFactory.seed = 0  # For reproducibility
+    LANGDETECT_AVAILABLE = True
+except ImportError:
+    LANGDETECT_AVAILABLE = False
+
 # Suppress BeautifulSoup URL warnings (we're parsing text that may contain URLs)
 warnings.filterwarnings("ignore", category=MarkupResemblesLocatorWarning)
 
@@ -83,6 +91,41 @@ HEADER_REGEX = re.compile(
 )
 BULLET_REGEX = re.compile(r"^\s*([\-\*•\u2022\u25CF\u25E6]|\d+\.)\s+")
 SENT_SPLIT_REGEX = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9])")
+
+# Language detection cache for jobs (to avoid re-detecting for each chunk)
+_LANGUAGE_CACHE: Dict[str, str] = {}
+
+
+def detect_language(text: str, job_key: Optional[str] = None) -> str:
+    """Detect language of text using langdetect.
+
+    Args:
+        text: Text to detect language for.
+        job_key: Optional job key for caching.
+
+    Returns:
+        ISO 639-1 language code (e.g., 'en', 'nl', 'de') or 'unknown'.
+    """
+    if not LANGDETECT_AVAILABLE:
+        return "unknown"
+
+    # Check cache first
+    if job_key and job_key in _LANGUAGE_CACHE:
+        return _LANGUAGE_CACHE[job_key]
+
+    if not text or len(text.strip()) < 20:
+        return "unknown"
+
+    try:
+        # Use first 500 chars for speed
+        lang = langdetect_detect(text[:500])
+        if job_key:
+            _LANGUAGE_CACHE[job_key] = lang
+        return lang
+    except Exception:
+        if job_key:
+            _LANGUAGE_CACHE[job_key] = "unknown"
+        return "unknown"
 
 
 @dataclass
@@ -212,6 +255,9 @@ def make_chunks(doc: Dict[str, Any], order_start: int = 0) -> List[Chunk]:
         f"{job_data.get('title', 'unknown')}"
     )
 
+    # Detect language (once per job, cached by job_key)
+    language = detect_language(desc, job_key=job_key)
+
     # Try to respect line breaks for headers/bullets
     soft_lines = re.sub(r"\s*\n\s*", "\n", job_data.get("description", ""))
     text_lines = [BeautifulSoup(ln, "html.parser").get_text(" ") for ln in soft_lines.split("\n")]
@@ -250,6 +296,7 @@ def make_chunks(doc: Dict[str, Any], order_start: int = 0) -> List[Chunk]:
                     "jobUrl": job_data.get("jobUrl"),
                     "applyUrl": job_data.get("applyUrl"),
                     "applied_times": doc.get("meta", {}).get("applied_times"),
+                    "language": language,
                 },
             )
             chunks.append(ch)

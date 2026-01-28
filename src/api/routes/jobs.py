@@ -58,8 +58,6 @@ async def list_jobs(
     if retriever is None:
         raise HTTPException(status_code=503, detail="Search artifacts not loaded")
 
-    job_languages = getattr(request.app.state, "job_languages", {})
-
     # Group chunks by job
     jobs: Dict[str, Dict[str, Any]] = {}
     for ch in retriever.chunks:
@@ -76,7 +74,7 @@ async def list_jobs(
                 "contract_type": meta.get("contractType"),
                 "work_type": meta.get("workType"),
                 "salary": meta.get("salary"),
-                "language": job_languages.get(jk, ""),
+                "language": meta.get("language", ""),
                 "n_chunks": 0,
             }
         jobs[jk]["n_chunks"] = jobs[jk].get("n_chunks", 0) + 1
@@ -106,10 +104,22 @@ async def list_jobs(
 @router.get("/languages")
 async def list_languages(request: Request) -> Dict[str, Any]:
     """List detected languages and their counts."""
-    job_languages = getattr(request.app.state, "job_languages", {})
+    retriever = request.app.state.retriever
+    if retriever is None:
+        return {"languages": []}
+
+    # Count languages from chunk metadata (dedupe by job_key)
+    seen_jobs: set = set()
     counts: Dict[str, int] = {}
-    for lang in job_languages.values():
-        counts[lang] = counts.get(lang, 0) + 1
+    for ch in retriever.chunks:
+        jk = ch.get("job_key", "")
+        if jk in seen_jobs:
+            continue
+        seen_jobs.add(jk)
+        lang = ch.get("meta", {}).get("language", "")
+        if lang:
+            counts[lang] = counts.get(lang, 0) + 1
+
     sorted_langs = sorted(counts.items(), key=lambda x: -x[1])
     return {"languages": [{"code": code, "count": count} for code, count in sorted_langs]}
 
@@ -125,7 +135,6 @@ async def get_jobs_batch(request: Request, body: BatchJobsRequest) -> Dict[str, 
     if retriever is None:
         raise HTTPException(status_code=503, detail="Search artifacts not loaded")
 
-    job_languages = getattr(request.app.state, "job_languages", {})
     requested = set(body.job_ids)
 
     jobs: Dict[str, Dict[str, Any]] = {}
@@ -145,7 +154,7 @@ async def get_jobs_batch(request: Request, body: BatchJobsRequest) -> Dict[str, 
                 "contract_type": meta.get("contractType"),
                 "work_type": meta.get("workType"),
                 "salary": meta.get("salary"),
-                "language": job_languages.get(jk, ""),
+                "language": meta.get("language", ""),
                 "n_chunks": 0,
             }
         jobs[jk]["n_chunks"] = jobs[jk].get("n_chunks", 0) + 1
