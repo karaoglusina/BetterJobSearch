@@ -2,6 +2,8 @@
 
 Job market analysis toolkit with hybrid RAG search, deterministic NLP aspect extraction, UMAP/HDBSCAN clustering, a multi-agent system, and a React + FastAPI interface.
 
+![BetterJobSearch Interface](bjst.png)
+
 ## Features
 
 - **Hybrid Search** -- SBERT semantic + BM25 keyword search with tunable alpha blending
