@@ -15,13 +15,15 @@ You have access to search tools:
 - semantic_search: For conceptual queries ("jobs involving customer analytics")
 - keyword_search: For specific terms ("Python", "Amsterdam", company names)
 - filter_jobs: For metadata filtering (location, skills, remote policy)
+- get_selected_jobs: Get details about jobs the user has selected in the UI
 
 Strategy:
 1. Analyze the user's query to understand what they're looking for
-2. Use the most appropriate search tool(s)
-3. If initial results are insufficient, try reformulating the query
-4. Synthesize findings into a clear, concise answer
-5. Always mention specific job titles and companies in your response
+2. If the user mentions "selected jobs", "these jobs", or has jobs selected, use get_selected_jobs
+3. Use the most appropriate search tool(s)
+4. If initial results are insufficient, try reformulating the query
+5. Synthesize findings into a clear, concise answer
+6. Always mention specific job titles and companies in your response
 
 Keep responses concise and actionable."""
 
@@ -32,7 +34,7 @@ class SearchWorker:
     def __init__(self, registry: ToolRegistry, *, model: str = "gpt-4o-mini"):
         self.registry = registry
         self.model = model
-        self.tool_names = ["hybrid_search", "semantic_search", "keyword_search", "filter_jobs"]
+        self.tool_names = ["hybrid_search", "semantic_search", "keyword_search", "filter_jobs", "get_selected_jobs"]
 
     def run(
         self,
@@ -40,6 +42,7 @@ class SearchWorker:
         *,
         context: str = "",
         on_tool_call: Optional[Any] = None,
+        selected_job_ids: Optional[List[str]] = None,
     ) -> AgentResult:
         """Run the search worker."""
         tools = self.registry.get_openai_tools(self.tool_names)
@@ -48,11 +51,17 @@ class SearchWorker:
         if context:
             user_msg = f"{query}\n\nContext:\n{context}"
 
+        # Create a tool executor that passes selected_job_ids to the get_selected_jobs tool
+        def tool_executor(tool_name: str, **kwargs):
+            if tool_name == "get_selected_jobs" and selected_job_ids:
+                kwargs["_selected_job_ids"] = selected_job_ids
+            return self.registry.execute(tool_name, **kwargs)
+
         return react_loop(
             system_prompt=SYSTEM_PROMPT,
             user_message=user_msg,
             tools=tools,
-            tool_executor=self.registry.execute,
+            tool_executor=tool_executor,
             max_iterations=4,
             model=self.model,
             on_tool_call=on_tool_call,

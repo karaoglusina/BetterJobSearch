@@ -108,6 +108,50 @@ def filter_jobs(skills: Optional[List[str]] = None, location: Optional[str] = No
     return f"Found {len(results)} matching jobs:\n" + "\n".join(lines)
 
 
+def get_selected_jobs(_selected_job_ids: Optional[List[str]] = None, **kwargs) -> str:
+    """Get details about jobs the user has selected in the UI.
+
+    This tool receives the selected job IDs from the UI context.
+    """
+    if not _selected_job_ids:
+        return "No jobs are currently selected. Ask the user to select jobs in the UI first."
+
+    retriever = _get_retriever()
+    all_chunks = retriever.get_all_chunks()
+
+    # Build job data from chunks
+    jobs: Dict[str, Dict[str, Any]] = {}
+    for ch in all_chunks:
+        jk = ch.get("job_key", "")
+        if jk in _selected_job_ids:
+            if jk not in jobs:
+                meta = ch.get("meta", {})
+                jobs[jk] = {
+                    "job_key": jk,
+                    "title": meta.get("title", ""),
+                    "company": meta.get("company", ""),
+                    "location": meta.get("location", ""),
+                    "chunks": [],
+                }
+            jobs[jk]["chunks"].append(ch.get("text", "")[:300])
+
+    if not jobs:
+        return f"Could not find details for the {len(_selected_job_ids)} selected job(s). They may not be in the current dataset."
+
+    lines: List[str] = []
+    for jk, job in jobs.items():
+        lines.append(f"\n## {job['title']} @ {job['company']}")
+        lines.append(f"Location: {job['location']}")
+        lines.append(f"Job ID: {jk}")
+        # Include first 2 chunks as content sample
+        for i, chunk in enumerate(job["chunks"][:2]):
+            lines.append(f"Content ({i+1}): {chunk}...")
+
+    result = f"Selected {len(jobs)} job(s):\n" + "\n".join(lines)
+    result += f"\n\n[JOB_IDS:{','.join(_selected_job_ids)}]"
+    return result
+
+
 def register_search_tools(registry: ToolRegistry) -> None:
     """Register all search tools."""
     registry.register("semantic_search", semantic_search, {
@@ -160,5 +204,14 @@ def register_search_tools(registry: ToolRegistry) -> None:
                 "location": {"type": "string", "description": "Location filter (partial match)"},
                 "remote_policy": {"type": "string", "description": "Remote policy: remote, hybrid, or onsite"},
             },
+        },
+    })
+
+    registry.register("get_selected_jobs", get_selected_jobs, {
+        "name": "get_selected_jobs",
+        "description": "Get details about jobs the user has selected in the UI. Use this when the user mentions 'selected jobs', 'these jobs', or when you see they have jobs selected.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
         },
     })

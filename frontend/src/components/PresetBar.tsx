@@ -1,10 +1,30 @@
 import React, { useState } from 'react';
 
+export interface ClusterSettingsState {
+  n_neighbors: number;
+  min_dist: number;
+  min_cluster_size: number;
+  tfidf_min_df: number;
+  tfidf_max_df: number;
+}
+
+export interface FilterState {
+  location: string;
+  company: string;
+  title_contains: string;
+  language: string;
+}
+
 export interface UIPreset {
   name: string;
   aspect: string;
   view: 'scatter' | 'table';
   clusterFilterEnabled: boolean;
+  // Extended fields
+  clusterSettings?: ClusterSettingsState;
+  filters?: FilterState;
+  keywordQuery?: string;
+  labelFilter?: string[];
 }
 
 const STORAGE_KEY = 'bjs_presets';

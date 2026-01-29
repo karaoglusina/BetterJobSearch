@@ -6,9 +6,20 @@ interface FilterPanelProps {
   onKeywordSearch?: (query: string) => void;
   keywordSearchLoading?: boolean;
   jobSource?: string;
+  availableLabels?: string[];
+  selectedLabels?: string[];
+  onLabelFilterChange?: (labels: string[]) => void;
 }
 
-export default function FilterPanel({ onFilterChange, onKeywordSearch, keywordSearchLoading, jobSource }: FilterPanelProps) {
+export default function FilterPanel({
+  onFilterChange,
+  onKeywordSearch,
+  keywordSearchLoading,
+  jobSource,
+  availableLabels = [],
+  selectedLabels = [],
+  onLabelFilterChange,
+}: FilterPanelProps) {
   const [location, setLocation] = useState('');
   const [company, setCompany] = useState('');
   const [titleContains, setTitleContains] = useState('');
@@ -148,6 +159,62 @@ export default function FilterPanel({ onFilterChange, onKeywordSearch, keywordSe
               </option>
             ))}
           </select>
+        )}
+
+        {/* Label filter */}
+        {availableLabels.length > 0 && (
+          <div>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>
+              Filter by label:
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+              {availableLabels.map((label) => {
+                const isSelected = selectedLabels.includes(label);
+                return (
+                  <button
+                    key={label}
+                    onClick={() => {
+                      if (!onLabelFilterChange) return;
+                      if (isSelected) {
+                        onLabelFilterChange(selectedLabels.filter(l => l !== label));
+                      } else {
+                        onLabelFilterChange([...selectedLabels, label]);
+                      }
+                    }}
+                    style={{
+                      padding: '3px 8px',
+                      borderRadius: 10,
+                      fontSize: 11,
+                      cursor: 'pointer',
+                      border: '1px solid',
+                      borderColor: isSelected ? 'var(--accent)' : 'var(--border)',
+                      background: isSelected ? 'var(--accent)' : 'transparent',
+                      color: isSelected ? 'white' : 'var(--text-primary)',
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+            {selectedLabels.length > 0 && (
+              <button
+                onClick={() => onLabelFilterChange?.([])}
+                style={{
+                  marginTop: 4,
+                  padding: '2px 6px',
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-secondary)',
+                  fontSize: 10,
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                }}
+              >
+                Clear label filter
+              </button>
+            )}
+          </div>
         )}
 
         <div style={{ display: 'flex', gap: 6 }}>

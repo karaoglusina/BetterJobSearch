@@ -32,6 +32,7 @@ export interface ClusterPoint {
   y: number;
   cluster_id: number;
   cluster_label: string;
+  cluster_keywords?: string[];
 }
 
 export interface HealthResponse {
@@ -89,13 +90,27 @@ export const api = {
       body: JSON.stringify({ query, fields, limit }),
     }),
 
-  getClusters: (aspect = 'default', params?: { n_neighbors?: number; min_dist?: number; min_cluster_size?: number; tfidf_min_df?: number; tfidf_max_df?: number }) => {
+  getClusters: (aspect = 'default', params?: {
+    n_neighbors?: number;
+    min_dist?: number;
+    min_cluster_size?: number;
+    tfidf_min_df?: number;
+    tfidf_max_df?: number;
+    npmi_min?: number;
+    npmi_max?: number;
+    effect_size_min?: number;
+    effect_size_max?: number;
+  }) => {
     const searchParams = new URLSearchParams();
     if (params?.n_neighbors !== undefined) searchParams.set('n_neighbors', String(params.n_neighbors));
     if (params?.min_dist !== undefined) searchParams.set('min_dist', String(params.min_dist));
     if (params?.min_cluster_size !== undefined) searchParams.set('min_cluster_size', String(params.min_cluster_size));
     if (params?.tfidf_min_df !== undefined) searchParams.set('tfidf_min_df', String(params.tfidf_min_df));
     if (params?.tfidf_max_df !== undefined) searchParams.set('tfidf_max_df', String(params.tfidf_max_df));
+    if (params?.npmi_min !== undefined) searchParams.set('npmi_min', String(params.npmi_min));
+    if (params?.npmi_max !== undefined) searchParams.set('npmi_max', String(params.npmi_max));
+    if (params?.effect_size_min !== undefined) searchParams.set('effect_size_min', String(params.effect_size_min));
+    if (params?.effect_size_max !== undefined) searchParams.set('effect_size_max', String(params.effect_size_max));
     const qs = searchParams.toString();
     return fetchJson<{ aspect: string; n_jobs: number; data: ClusterPoint[] }>(`/clusters/${aspect}${qs ? `?${qs}` : ''}`);
   },
@@ -110,4 +125,26 @@ export const api = {
 
   getAspectDistribution: (name: string) =>
     fetchJson<{ aspect: string; total_jobs: number; coverage: number; value_counts: Record<string, number> }>(`/aspects/${name}/distribution`),
+
+  // Labels API
+  getLabels: () =>
+    fetchJson<{ labels: Record<string, string[]>; all_labels: string[]; n_labeled_jobs: number }>('/labels'),
+
+  saveLabels: (labels: Record<string, string[]>) =>
+    fetchJson<{ success: boolean; n_labeled_jobs: number }>('/labels', {
+      method: 'PUT',
+      body: JSON.stringify({ labels }),
+    }),
+
+  addLabel: (jobId: string, label: string) =>
+    fetchJson<{ success: boolean; job_id: string; labels: string[] }>('/labels/add', {
+      method: 'POST',
+      body: JSON.stringify({ job_id: jobId, label }),
+    }),
+
+  removeLabel: (jobId: string, label: string) =>
+    fetchJson<{ success: boolean; job_id: string; labels: string[] }>('/labels/remove', {
+      method: 'POST',
+      body: JSON.stringify({ job_id: jobId, label }),
+    }),
 };

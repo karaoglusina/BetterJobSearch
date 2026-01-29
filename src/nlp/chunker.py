@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 from ..models.aspect import AspectExtraction
 from ..models.chunk import ChunkWithAspects
 from .cleaner import clean_html
-from .section_detector import detect_sections, Section
+from .section_detector import detect_sections_structural, Section
 from .aspect_extractor import AspectExtractor
 
 BULLET_REGEX = re.compile(r"^\s*([\-\*\u2022\u25CF\u25E6]|\d+\.)\s+")
@@ -100,8 +100,8 @@ def chunk_job(
     # Clean HTML preserving structure
     cleaned = clean_html(description)
 
-    # Detect sections
-    sections = detect_sections(cleaned)
+    # Detect sections using structural analysis
+    sections = detect_sections_structural(cleaned)
     if not sections:
         sections = [Section(name=None, raw_name=None, text=cleaned)]
 
@@ -137,6 +137,9 @@ def chunk_job(
             if aspect_extractor is not None:
                 aspects = aspect_extractor.extract_for_chunk(raw_text, section=section.name)
 
+            # Include raw section name for UI display
+            chunk_meta = {**meta, "section_raw": section.raw_name}
+
             chunk = ChunkWithAspects(
                 chunk_id=_stable_chunk_id(job_key, order),
                 chunk_id_v2=_content_chunk_id(job_key, raw_text),
@@ -144,7 +147,7 @@ def chunk_job(
                 text=raw_text,
                 section=section.name,
                 order=order,
-                meta=meta,
+                meta=chunk_meta,
                 aspects=aspects,
                 keywords=[],  # Filled later by keyword extraction
             )

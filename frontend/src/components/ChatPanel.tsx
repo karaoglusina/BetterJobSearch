@@ -1,12 +1,20 @@
-import React, { useRef, useEffect, useState } from 'react';
-import { useWebSocket, ChatMessage } from '../hooks/useWebSocket';
+import React, { useRef, useEffect, useState, useMemo } from 'react';
+import { useWebSocket, ChatMessage, WebSocketContext } from '../hooks/useWebSocket';
 
 interface ChatPanelProps {
   onSetJobs?: (jobIds: string[]) => void;
+  selectedJobIds?: Set<string>;
+  currentAspect?: string;
 }
 
-export default function ChatPanel({ onSetJobs }: ChatPanelProps) {
-  const { messages, sendMessage, resetChat, isConnected, isLoading } = useWebSocket(onSetJobs);
+export default function ChatPanel({ onSetJobs, selectedJobIds, currentAspect }: ChatPanelProps) {
+  // Memoize context to avoid unnecessary reconnections
+  const context = useMemo((): WebSocketContext => ({
+    selectedJobIds: selectedJobIds ? Array.from(selectedJobIds) : undefined,
+    currentAspect,
+  }), [selectedJobIds, currentAspect]);
+
+  const { messages, sendMessage, resetChat, isConnected, isLoading } = useWebSocket(onSetJobs, context);
   const [input, setInput] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
 

@@ -63,6 +63,7 @@ class Coordinator:
         *,
         on_tool_call: Optional[Callable] = None,
         on_intent: Optional[Callable[[IntentClassification], None]] = None,
+        selected_job_ids: Optional[List[str]] = None,
     ) -> AgentResult:
         """Handle a user message by classifying intent and delegating to the appropriate worker.
 
@@ -70,6 +71,7 @@ class Coordinator:
             user_message: The user's question or request.
             on_tool_call: Optional callback for tool call events.
             on_intent: Optional callback when intent is classified.
+            selected_job_ids: List of job IDs currently selected in the UI.
 
         Returns:
             AgentResult with the answer and trace.
@@ -85,17 +87,34 @@ class Coordinator:
         # Build context hint from memory
         context = self.memory.get_context_hint()
 
+        # Add selection context if jobs are selected
+        if selected_job_ids:
+            selection_context = f"\n[User has {len(selected_job_ids)} job(s) selected: {', '.join(selected_job_ids[:5])}{'...' if len(selected_job_ids) > 5 else ''}]"
+            context = (context or "") + selection_context
+
         # Route to worker
         if intent.intent == "search":
-            result = self.search_worker.run(user_message, context=context, on_tool_call=on_tool_call)
+            result = self.search_worker.run(
+                user_message, context=context, on_tool_call=on_tool_call,
+                selected_job_ids=selected_job_ids
+            )
         elif intent.intent in ("compare", "detail"):
-            result = self.analysis_worker.run(user_message, context=context, on_tool_call=on_tool_call)
+            result = self.analysis_worker.run(
+                user_message, context=context, on_tool_call=on_tool_call,
+                selected_job_ids=selected_job_ids
+            )
         elif intent.intent == "explore":
-            result = self.exploration_worker.run(user_message, context=context, on_tool_call=on_tool_call)
+            result = self.exploration_worker.run(
+                user_message, context=context, on_tool_call=on_tool_call,
+                selected_job_ids=selected_job_ids
+            )
         elif intent.intent == "general":
-            result = self._handle_general(user_message)
+            result = self._handle_general(user_message, selected_job_ids=selected_job_ids)
         else:
-            result = self.search_worker.run(user_message, context=context, on_tool_call=on_tool_call)
+            result = self.search_worker.run(
+                user_message, context=context, on_tool_call=on_tool_call,
+                selected_job_ids=selected_job_ids
+            )
 
         # Save assistant response to memory
         self.memory.add_turn("assistant", result.answer)
@@ -152,7 +171,9 @@ class Coordinator:
         else:
             return IntentClassification(intent="search", confidence=0.5)
 
-    def _handle_general(self, message: str) -> AgentResult:
+    def _handle_general(
+        self, message: str, *, selected_job_ids: Optional[List[str]] = None
+    ) -> AgentResult:
         """Handle general questions without tool use."""
         if not os.environ.get("OPENAI_API_KEY"):
             return AgentResult(
@@ -164,10 +185,15 @@ class Coordinator:
             from openai import OpenAI
             client = OpenAI()
 
+            system_content = "You are a job market analyst assistant. Answer general questions about the system capabilities, available aspects (skills, tools, language, remote_policy, experience, education, benefits, domain, culture), and how to use the search and exploration features."
+
+            if selected_job_ids:
+                system_content += f"\n\nThe user currently has {len(selected_job_ids)} job(s) selected in the UI. If they ask about 'selected jobs' or 'these jobs', they're referring to their selection."
+
             resp = client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": "You are a job market analyst assistant. Answer general questions about the system capabilities, available aspects (skills, tools, language, remote_policy, experience, education, benefits, domain, culture), and how to use the search and exploration features."},
+                    {"role": "system", "content": system_content},
                     {"role": "user", "content": message},
                 ],
                 temperature=0.3,
