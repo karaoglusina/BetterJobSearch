@@ -6,6 +6,12 @@ interface JobDetailProps {
   onClose: () => void;
 }
 
+interface ParsedSection {
+  name: string;
+  raw_name: string | null;
+  text: string;
+}
+
 interface JobFullDetail {
   job_id: string;
   title: string;
@@ -16,8 +22,31 @@ interface JobFullDetail {
   salary?: string;
   full_text: string;
   sections: string[];
+  parsed_sections?: ParsedSection[];
   n_chunks: number;
 }
+
+// Friendly display names for canonical section types
+const SECTION_LABELS: Record<string, string> = {
+  intro: 'Overview',
+  responsibilities: 'Responsibilities',
+  requirements: 'Requirements',
+  nice_to_have: 'Nice to Have',
+  about_you: 'About You',
+  about_company: 'About the Company',
+  benefits: 'Benefits',
+  culture: 'Culture',
+  culture_team: 'Culture & Team',
+  skills: 'Skills',
+  tools: 'Tools & Tech',
+  education: 'Education',
+  experience: 'Experience',
+  languages: 'Languages',
+  how_to_apply: 'How to Apply',
+  application_info: 'Application',
+  role_description: 'The Role',
+  other: 'Other',
+};
 
 export default function JobDetail({ jobId, onClose }: JobDetailProps) {
   const [job, setJob] = useState<JobFullDetail | null>(null);
@@ -78,18 +107,45 @@ export default function JobDetail({ jobId, onClose }: JobDetailProps) {
               Open posting →
             </a>
           )}
-          {job.sections.length > 0 && (
-            <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
-              Sections: {job.sections.join(', ')}
+
+          {/* Render structured sections if available */}
+          {job.parsed_sections && job.parsed_sections.length > 0 ? (
+            <div style={{ marginTop: 12, maxHeight: 200, overflowY: 'auto' }}>
+              {job.parsed_sections.map((section, idx) => (
+                <div key={idx} style={{ marginBottom: 12 }}>
+                  <div style={{
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: 'var(--accent)',
+                    marginBottom: 4,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px',
+                  }}>
+                    {SECTION_LABELS[section.name] || section.raw_name || section.name}
+                  </div>
+                  <div style={{
+                    fontSize: 13,
+                    lineHeight: 1.6,
+                    whiteSpace: 'pre-wrap',
+                    color: 'var(--text-primary)',
+                    paddingLeft: 8,
+                    borderLeft: '2px solid var(--border)',
+                  }}>
+                    {section.text}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            /* Fallback to full text if no parsed sections */
+            <div style={{
+              marginTop: 12, fontSize: 13, lineHeight: 1.6,
+              whiteSpace: 'pre-wrap', color: 'var(--text-primary)',
+              maxHeight: 200, overflowY: 'auto',
+            }}>
+              {job.full_text}
             </div>
           )}
-          <div style={{
-            marginTop: 12, fontSize: 13, lineHeight: 1.6,
-            whiteSpace: 'pre-wrap', color: 'var(--text-primary)',
-            maxHeight: 200, overflowY: 'auto',
-          }}>
-            {job.full_text}
-          </div>
         </div>
       )}
     </div>

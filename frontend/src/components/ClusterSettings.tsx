@@ -1,18 +1,68 @@
 import React, { useState } from 'react';
 import type { ClusterParams } from '../hooks/useClusters';
+import type { ClusterSettingsState } from './PresetBar';
+
+export const DEFAULT_CLUSTER_SETTINGS: ClusterSettingsState = {
+  n_neighbors: 15,
+  min_dist: 0.1,
+  min_cluster_size: 0,
+  tfidf_min_df: 0,
+  tfidf_max_df: 100,
+};
 
 interface ClusterSettingsProps {
   onApply: (params: ClusterParams) => void;
   loading?: boolean;
+  // Controlled mode
+  settings?: ClusterSettingsState;
+  onSettingsChange?: (settings: ClusterSettingsState) => void;
 }
 
-export default function ClusterSettings({ onApply, loading }: ClusterSettingsProps) {
+export default function ClusterSettings({
+  onApply,
+  loading,
+  settings,
+  onSettingsChange,
+}: ClusterSettingsProps) {
   const [expanded, setExpanded] = useState(false);
-  const [nNeighbors, setNNeighbors] = useState(15);
-  const [minDist, setMinDist] = useState(0.1);
-  const [minClusterSize, setMinClusterSize] = useState(0); // 0 = auto
-  const [tfidfMinDf, setTfidfMinDf] = useState(0); // 0 = no filter
-  const [tfidfMaxDf, setTfidfMaxDf] = useState(100); // 100 = no filter (100% = 1.0)
+
+  // Use controlled state if provided, otherwise local state
+  const isControlled = settings !== undefined && onSettingsChange !== undefined;
+
+  const [localNNeighbors, setLocalNNeighbors] = useState(DEFAULT_CLUSTER_SETTINGS.n_neighbors);
+  const [localMinDist, setLocalMinDist] = useState(DEFAULT_CLUSTER_SETTINGS.min_dist);
+  const [localMinClusterSize, setLocalMinClusterSize] = useState(DEFAULT_CLUSTER_SETTINGS.min_cluster_size);
+  const [localTfidfMinDf, setLocalTfidfMinDf] = useState(DEFAULT_CLUSTER_SETTINGS.tfidf_min_df);
+  const [localTfidfMaxDf, setLocalTfidfMaxDf] = useState(DEFAULT_CLUSTER_SETTINGS.tfidf_max_df);
+
+  // Current values (from props or local)
+  const nNeighbors = isControlled ? settings.n_neighbors : localNNeighbors;
+  const minDist = isControlled ? settings.min_dist : localMinDist;
+  const minClusterSize = isControlled ? settings.min_cluster_size : localMinClusterSize;
+  const tfidfMinDf = isControlled ? settings.tfidf_min_df : localTfidfMinDf;
+  const tfidfMaxDf = isControlled ? settings.tfidf_max_df : localTfidfMaxDf;
+
+  // Setters that work in both controlled and uncontrolled modes
+  const setNNeighbors = (v: number) => {
+    if (isControlled) onSettingsChange({ ...settings, n_neighbors: v });
+    else setLocalNNeighbors(v);
+  };
+  const setMinDist = (v: number) => {
+    if (isControlled) onSettingsChange({ ...settings, min_dist: v });
+    else setLocalMinDist(v);
+  };
+  const setMinClusterSize = (v: number) => {
+    if (isControlled) onSettingsChange({ ...settings, min_cluster_size: v });
+    else setLocalMinClusterSize(v);
+  };
+  const setTfidfMinDf = (v: number) => {
+    if (isControlled) onSettingsChange({ ...settings, tfidf_min_df: v });
+    else setLocalTfidfMinDf(v);
+  };
+  const setTfidfMaxDf = (v: number) => {
+    if (isControlled) onSettingsChange({ ...settings, tfidf_max_df: v });
+    else setLocalTfidfMaxDf(v);
+  };
 
   const handleApply = () => {
     onApply({
@@ -25,11 +75,15 @@ export default function ClusterSettings({ onApply, loading }: ClusterSettingsPro
   };
 
   const handleReset = () => {
-    setNNeighbors(15);
-    setMinDist(0.1);
-    setMinClusterSize(0);
-    setTfidfMinDf(0);
-    setTfidfMaxDf(100);
+    if (isControlled) {
+      onSettingsChange(DEFAULT_CLUSTER_SETTINGS);
+    } else {
+      setLocalNNeighbors(DEFAULT_CLUSTER_SETTINGS.n_neighbors);
+      setLocalMinDist(DEFAULT_CLUSTER_SETTINGS.min_dist);
+      setLocalMinClusterSize(DEFAULT_CLUSTER_SETTINGS.min_cluster_size);
+      setLocalTfidfMinDf(DEFAULT_CLUSTER_SETTINGS.tfidf_min_df);
+      setLocalTfidfMaxDf(DEFAULT_CLUSTER_SETTINGS.tfidf_max_df);
+    }
     onApply({});
   };
 

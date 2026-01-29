@@ -65,6 +65,24 @@ async def lifespan(app: FastAPI):
     else:
         app.state.meaningful_phrases = []
 
+    # Load phrase scores for NPMI/effect_size filtering (if available)
+    phrase_scores_path = ARTIFACTS_DIR / "phrase_scores.parquet"
+    if phrase_scores_path.exists():
+        try:
+            import pandas as pd
+            phrase_scores_df = pd.read_parquet(phrase_scores_path)
+            # Convert to dict for fast lookup: ngram -> {npmi, effect_size}
+            app.state.phrase_scores = {
+                row['ngram']: {'npmi': row['npmi'], 'effect_size': row['effect_size']}
+                for _, row in phrase_scores_df.iterrows()
+            }
+            print(f"Loaded phrase scores for {len(app.state.phrase_scores)} phrases (NPMI/effect_size filtering enabled)")
+        except Exception as e:
+            print(f"Warning: Could not load phrase scores: {e}")
+            app.state.phrase_scores = {}
+    else:
+        app.state.phrase_scores = {}
+
     # Summarize languages from chunk metadata (language is now stored during build)
     if app.state.retriever is not None:
         seen_jobs: set = set()
@@ -113,12 +131,13 @@ def create_app() -> FastAPI:
     )
 
     # Register routes
-    from .routes import jobs, search, clusters, aspects, chat
+    from .routes import jobs, search, clusters, aspects, chat, labels
     app.include_router(jobs.router, prefix="/api")
     app.include_router(search.router, prefix="/api")
     app.include_router(clusters.router, prefix="/api")
     app.include_router(aspects.router, prefix="/api")
     app.include_router(chat.router, prefix="/api")
+    app.include_router(labels.router, prefix="/api")
 
     @app.get("/")
     async def root():

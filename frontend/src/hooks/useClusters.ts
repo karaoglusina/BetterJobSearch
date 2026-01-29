@@ -7,6 +7,10 @@ export interface ClusterParams {
   min_cluster_size?: number;
   tfidf_min_df?: number;
   tfidf_max_df?: number;
+  npmi_min?: number;
+  npmi_max?: number;
+  effect_size_min?: number;
+  effect_size_max?: number;
 }
 
 export function useClusters() {

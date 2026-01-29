@@ -28,7 +28,16 @@ export interface WsMessage {
 const MAX_RECONNECT_ATTEMPTS = 5;
 const RECONNECT_BASE_DELAY = 1000;
 
-export function useWebSocket(onSetJobs?: (jobIds: string[]) => void) {
+export interface WebSocketContext {
+  selectedJobIds?: string[];
+  currentAspect?: string;
+  currentFilters?: Record<string, string>;
+}
+
+export function useWebSocket(
+  onSetJobs?: (jobIds: string[]) => void,
+  context?: WebSocketContext
+) {
   const wsRef = useRef<WebSocket | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isConnected, setIsConnected] = useState(false);
@@ -37,7 +46,9 @@ export function useWebSocket(onSetJobs?: (jobIds: string[]) => void) {
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
   const onSetJobsRef = useRef(onSetJobs);
+  const contextRef = useRef(context);
   onSetJobsRef.current = onSetJobs;
+  contextRef.current = context;
 
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN || !mountedRef.current) return;
@@ -127,7 +138,18 @@ export function useWebSocket(onSetJobs?: (jobIds: string[]) => void) {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
     setMessages((prev) => [...prev, { role: 'user', content }]);
     setIsLoading(true);
-    wsRef.current.send(JSON.stringify({ type: 'message', content }));
+
+    // Include context (selected jobs, etc.) in the message
+    const payload: Record<string, unknown> = {
+      type: 'message',
+      content,
+    };
+
+    if (contextRef.current) {
+      payload.context = contextRef.current;
+    }
+
+    wsRef.current.send(JSON.stringify(payload));
   }, []);
 
   const resetChat = useCallback(() => {

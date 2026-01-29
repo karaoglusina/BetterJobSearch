@@ -109,7 +109,7 @@ def _generate_cluster_labels(
     tfidf_min_df: float = 0.0,
     tfidf_max_df: float = 1.0,
     meaningful_phrases: Optional[List[str]] = None,
-) -> Dict[int, str]:
+) -> tuple[Dict[int, str], Dict[int, List[str]]]:
     """Generate descriptive cluster labels using c-TF-IDF keywords.
 
     Args:
@@ -121,6 +121,11 @@ def _generate_cluster_labels(
         tfidf_min_df: Minimum document frequency ratio (0-1).
         tfidf_max_df: Maximum document frequency ratio (0-1).
         meaningful_phrases: Optional whitelist of domain-specific phrases.
+
+    Returns:
+        Tuple of (label_map, keywords_map) where:
+        - label_map: cluster_id -> short label (3 keywords)
+        - keywords_map: cluster_id -> full keyword list (10 keywords)
     """
     from ...clustering_v2.labeler import compute_ctfidf
 
@@ -138,22 +143,24 @@ def _generate_cluster_labels(
         titles_per_cluster.setdefault(cid, []).append(titles[i])
 
     if not docs_per_cluster:
-        return {}
+        return {}, {}
 
     try:
         keywords = compute_ctfidf(
             docs_per_cluster,
-            top_n=5,
+            top_n=10,  # Get 10 keywords for tooltips
             min_df=tfidf_min_df,
             max_df=tfidf_max_df,
             meaningful_phrases=meaningful_phrases,
         )
-        return {
+        label_map = {
             cid: ", ".join(kws[:3]) if kws else f"Cluster {cid}"
             for cid, kws in keywords.items()
         }
+        return label_map, keywords
     except Exception:
-        return {int(l): f"Cluster {l}" for l in set(labels) if l >= 0}
+        label_map = {int(l): f"Cluster {l}" for l in set(labels) if l >= 0}
+        return label_map, {}
 
 
 def _compute_clusters(
@@ -231,7 +238,7 @@ def _compute_clusters(
     labels = cluster_hdbscan(coords, min_cluster_size=actual_min_cluster)
 
     # Generate descriptive labels using c-TF-IDF
-    label_map = _generate_cluster_labels(
+    label_map, keywords_map = _generate_cluster_labels(
         chunks, job_map, job_ids, labels, titles,
         tfidf_min_df=tfidf_min_df, tfidf_max_df=tfidf_max_df,
         meaningful_phrases=meaningful_phrases,
@@ -251,6 +258,7 @@ def _compute_clusters(
             "y": float(coords[i, 1]),
             "cluster_id": int(labels[i]),
             "cluster_label": label_map.get(int(labels[i]), "Noise"),
+            "cluster_keywords": keywords_map.get(int(labels[i]), []),
         }
         for i in range(len(job_ids))
     ]
@@ -281,7 +289,7 @@ def _compute_concept_clusters(chunks: List[Dict[str, Any]], faiss_index, concept
 
     # Generate descriptive labels for concept clusters
     cluster_ids_arr = np.array(result.cluster_ids)
-    label_map = _generate_cluster_labels(chunks, job_map, job_ids, cluster_ids_arr, titles)
+    label_map, keywords_map = _generate_cluster_labels(chunks, job_map, job_ids, cluster_ids_arr, titles)
 
     data = [
         {
@@ -292,6 +300,7 @@ def _compute_concept_clusters(chunks: List[Dict[str, Any]], faiss_index, concept
             "y": result.y[i],
             "cluster_id": result.cluster_ids[i],
             "cluster_label": label_map.get(result.cluster_ids[i], "Noise"),
+            "cluster_keywords": keywords_map.get(result.cluster_ids[i], []),
         }
         for i in range(len(result.job_ids))
     ]
@@ -313,6 +322,10 @@ async def get_clusters(
     min_cluster_size: Optional[int] = Query(None, ge=2, le=200),
     tfidf_min_df: float = Query(0.0, ge=0.0, le=0.5, description="TF-IDF min document frequency ratio"),
     tfidf_max_df: float = Query(1.0, ge=0.5, le=1.0, description="TF-IDF max document frequency ratio"),
+    npmi_min: float = Query(0.0, ge=0.0, le=1.0, description="Min coherence (NPMI) for keywords"),
+    npmi_max: float = Query(1.0, ge=0.0, le=2.0, description="Max coherence (NPMI) for keywords"),
+    effect_size_min: float = Query(0.0, ge=0.0, le=20.0, description="Min domain specificity for keywords"),
+    effect_size_max: float = Query(20.0, ge=0.0, le=20.0, description="Max domain specificity for keywords"),
 ) -> Dict[str, Any]:
     """Get cluster data for a specific aspect."""
     retriever = request.app.state.retriever
@@ -321,9 +334,23 @@ async def get_clusters(
 
     aspect_data = getattr(request.app.state, "aspect_data", {})
     meaningful_phrases = getattr(request.app.state, "meaningful_phrases", None)
+    phrase_scores = getattr(request.app.state, "phrase_scores", {})
     # Only use phrases if list is non-empty
     if meaningful_phrases is not None and len(meaningful_phrases) == 0:
         meaningful_phrases = None
+
+    # Filter meaningful phrases by NPMI and effect_size if phrase_scores available
+    filtered_phrases = meaningful_phrases
+    if phrase_scores and meaningful_phrases:
+        filtered_phrases = [
+            p for p in meaningful_phrases
+            if p in phrase_scores
+            and npmi_min <= phrase_scores[p].get('npmi', 0) <= npmi_max
+            and effect_size_min <= phrase_scores[p].get('effect_size', 0) <= effect_size_max
+        ]
+        # If filtering removes all phrases, fall back to unfiltered
+        if not filtered_phrases:
+            filtered_phrases = meaningful_phrases
 
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(
@@ -331,7 +358,7 @@ async def get_clusters(
             _compute_clusters, retriever.chunks, retriever.faiss_index, aspect, aspect_data,
             n_neighbors=n_neighbors, min_dist=min_dist, min_cluster_size=min_cluster_size,
             tfidf_min_df=tfidf_min_df, tfidf_max_df=tfidf_max_df,
-            meaningful_phrases=meaningful_phrases,
+            meaningful_phrases=filtered_phrases,
         )
     )
 

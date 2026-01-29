@@ -1,14 +1,17 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import ScatterPlot from './components/ScatterPlot';
 import JobTable from './components/JobTable';
 import ChatPanel from './components/ChatPanel';
 import AspectSelector from './components/AspectSelector';
 import JobDetail from './components/JobDetail';
 import FilterPanel from './components/FilterPanel';
-import ClusterSettings from './components/ClusterSettings';
-import PresetBar, { UIPreset } from './components/PresetBar';
+import ClusterSettings, { DEFAULT_CLUSTER_SETTINGS } from './components/ClusterSettings';
+import KeywordSettings, { DEFAULT_KEYWORD_SETTINGS, KeywordSettingsState } from './components/KeywordSettings';
+import PresetBar, { UIPreset, ClusterSettingsState } from './components/PresetBar';
+import LabelDialog from './components/LabelDialog';
 import { useJobs } from './hooks/useJobs';
 import { useClusters, ClusterParams } from './hooks/useClusters';
+import { useLabels } from './hooks/useLabels';
 
 type View = 'scatter' | 'table';
 
@@ -19,28 +22,52 @@ export default function App() {
     jobSource, setJobsFromExternal,
   } = useJobs();
   const { clusterData, currentAspect, loading: clusterLoading, fetchClusters, clusterByConcept } = useClusters();
-  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
-  const [highlightedJobs, setHighlightedJobs] = useState<Set<string>>(new Set());
+  const { jobLabels, allLabels, addLabel, removeLabel } = useLabels();
+  const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
   const [view, setView] = useState<View>('scatter');
   const [clusterFilterEnabled, setClusterFilterEnabled] = useState(true);
+  const [labelDialogOpen, setLabelDialogOpen] = useState(false);
+  const [labelFilter, setLabelFilter] = useState<string[]>([]);
+  const [clusterSettings, setClusterSettings] = useState<ClusterSettingsState>(DEFAULT_CLUSTER_SETTINGS);
+  const [keywordSettings, setKeywordSettings] = useState<KeywordSettingsState>(DEFAULT_KEYWORD_SETTINGS);
+
+  // Get first selected job for detail panel
+  const selectedJobId = useMemo(() => {
+    const arr = Array.from(selectedJobIds);
+    return arr.length > 0 ? arr[arr.length - 1] : null;
+  }, [selectedJobIds]);
+
+  // Filter jobs by label (client-side)
+  const filteredJobs = useMemo(() => {
+    if (labelFilter.length === 0) return jobs;
+    return jobs.filter(job => {
+      const jobLabelsList = jobLabels[job.job_id] || [];
+      return labelFilter.some(label => jobLabelsList.includes(label));
+    });
+  }, [jobs, jobLabels, labelFilter]);
 
   const filterJobIds = useMemo(() => {
     if (!keywordSearchActive || !clusterFilterEnabled) return undefined;
-    return new Set(jobs.map((j) => j.job_id));
-  }, [jobs, keywordSearchActive, clusterFilterEnabled]);
+    return new Set(filteredJobs.map((j) => j.job_id));
+  }, [filteredJobs, keywordSearchActive, clusterFilterEnabled]);
 
   const handleAspectSelect = useCallback((aspect: string) => {
     fetchClusters(aspect);
   }, [fetchClusters]);
 
+  // Single-click handler (for scatter plot click)
   const handlePointClick = useCallback((jobId: string) => {
-    setSelectedJobId(jobId);
-    setHighlightedJobs(new Set([jobId]));
+    setSelectedJobIds(new Set([jobId]));
   }, []);
 
+  // Multi-select handler (for both table and scatter lasso/box)
+  const handleSelectionChange = useCallback((ids: Set<string>) => {
+    setSelectedJobIds(ids);
+  }, []);
+
+  // Legacy single-select handler for table row click
   const handleJobSelect = useCallback((jobId: string) => {
-    setSelectedJobId(jobId);
-    setHighlightedJobs(new Set([jobId]));
+    setSelectedJobIds(new Set([jobId]));
   }, []);
 
   const handleFilterChange = useCallback((filters: { location?: string; company?: string; title_contains?: string; language?: string }) => {
@@ -54,8 +81,32 @@ export default function App() {
   }, [keywordSearch]);
 
   const handleClusterParamsApply = useCallback((params: ClusterParams) => {
-    fetchClusters(currentAspect, params);
-  }, [fetchClusters, currentAspect]);
+    // Merge current cluster settings, keyword settings, and any overrides
+    const mergedParams: ClusterParams = {
+      n_neighbors: clusterSettings.n_neighbors,
+      min_dist: clusterSettings.min_dist,
+      min_cluster_size: clusterSettings.min_cluster_size > 0 ? clusterSettings.min_cluster_size : undefined,
+      tfidf_min_df: keywordSettings.tfidf_min_df > 0 ? keywordSettings.tfidf_min_df / 100 : undefined,
+      tfidf_max_df: keywordSettings.tfidf_max_df < 100 ? keywordSettings.tfidf_max_df / 100 : undefined,
+      npmi_min: keywordSettings.npmi_min > 0 ? keywordSettings.npmi_min : undefined,
+      npmi_max: keywordSettings.npmi_max < 1.0 ? keywordSettings.npmi_max : undefined,
+      effect_size_min: keywordSettings.effect_size_min > 0 ? keywordSettings.effect_size_min : undefined,
+      effect_size_max: keywordSettings.effect_size_max < 20 ? keywordSettings.effect_size_max : undefined,
+      ...params,
+    };
+    fetchClusters(currentAspect, mergedParams);
+  }, [fetchClusters, currentAspect, clusterSettings, keywordSettings]);
+
+  const handleKeywordParamsApply = useCallback((params: ClusterParams) => {
+    // Merge keyword params with cluster settings
+    const mergedParams: ClusterParams = {
+      n_neighbors: clusterSettings.n_neighbors,
+      min_dist: clusterSettings.min_dist,
+      min_cluster_size: clusterSettings.min_cluster_size > 0 ? clusterSettings.min_cluster_size : undefined,
+      ...params,
+    };
+    fetchClusters(currentAspect, mergedParams);
+  }, [fetchClusters, currentAspect, clusterSettings]);
 
   const handleAgentSetJobs = useCallback(async (jobIds: string[]) => {
     if (!jobIds.length) return;
@@ -70,21 +121,81 @@ export default function App() {
   }, [setJobsFromExternal]);
 
   const handleCloseDetail = useCallback(() => {
-    setSelectedJobId(null);
-    setHighlightedJobs(new Set());
+    setSelectedJobIds(new Set());
   }, []);
 
+  // Label handlers
+  const handleApplyLabel = useCallback((label: string) => {
+    selectedJobIds.forEach(jobId => addLabel(jobId, label));
+  }, [selectedJobIds, addLabel]);
+
+  const handleRemoveLabel = useCallback((label: string) => {
+    selectedJobIds.forEach(jobId => removeLabel(jobId, label));
+  }, [selectedJobIds, removeLabel]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Check if user is typing in an input
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return;
+      }
+
+      // 'L' to open label dialog when jobs are selected
+      if (e.key === 'l' || e.key === 'L') {
+        if (selectedJobIds.size > 0) {
+          e.preventDefault();
+          setLabelDialogOpen(true);
+        }
+      }
+
+      // Escape to clear selection
+      if (e.key === 'Escape') {
+        setSelectedJobIds(new Set());
+        setLabelDialogOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedJobIds]);
+
   const handleRestorePreset = useCallback((preset: UIPreset) => {
-    fetchClusters(preset.aspect);
+    // Restore view state
     setView(preset.view);
     setClusterFilterEnabled(preset.clusterFilterEnabled);
-  }, [fetchClusters]);
+
+    // Restore cluster settings if present
+    if (preset.clusterSettings) {
+      setClusterSettings(preset.clusterSettings);
+    }
+
+    // Restore label filter if present
+    if (preset.labelFilter) {
+      setLabelFilter(preset.labelFilter);
+    }
+
+    // Build cluster params from preset settings
+    const settings = preset.clusterSettings || clusterSettings;
+    const params: ClusterParams = {
+      n_neighbors: settings.n_neighbors,
+      min_dist: settings.min_dist,
+      min_cluster_size: settings.min_cluster_size > 0 ? settings.min_cluster_size : undefined,
+      tfidf_min_df: settings.tfidf_min_df > 0 ? settings.tfidf_min_df / 100 : undefined,
+      tfidf_max_df: settings.tfidf_max_df < 100 ? settings.tfidf_max_df / 100 : undefined,
+    };
+
+    fetchClusters(preset.aspect, params);
+  }, [fetchClusters, clusterSettings]);
 
   const currentPresetState = useMemo(() => ({
     aspect: currentAspect,
     view,
     clusterFilterEnabled,
-  }), [currentAspect, view, clusterFilterEnabled]);
+    clusterSettings,
+    labelFilter,
+  }), [currentAspect, view, clusterFilterEnabled, clusterSettings, labelFilter]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
@@ -97,13 +208,17 @@ export default function App() {
         <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>BetterJobSearch</h1>
         <PresetBar currentState={currentPresetState} onRestore={handleRestorePreset} />
         <div style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 8 }}>
-          {totalJobs} jobs
+          {labelFilter.length > 0 ? `${filteredJobs.length} / ${totalJobs} jobs` : `${totalJobs} jobs`}
+          {labelFilter.length > 0 && <span style={{ color: '#f59e0b', fontSize: 11 }}>label filter</span>}
           {jobSource === 'keyword' && <span style={{ color: 'var(--accent)', fontSize: 11 }}>keyword search</span>}
           {jobSource === 'agent' && <span style={{ color: '#22c55e', fontSize: 11 }}>agent results</span>}
           {jobSource === 'filter' && <span style={{ color: 'var(--text-secondary)', fontSize: 11 }}>filtered</span>}
-          {jobSource !== 'default' && (
+          {(jobSource !== 'default' || labelFilter.length > 0) && (
             <button
-              onClick={() => fetchJobs({ limit: 50 })}
+              onClick={() => {
+                fetchJobs({ limit: 50 });
+                setLabelFilter([]);
+              }}
               style={{
                 background: 'transparent', border: '1px solid var(--border)',
                 color: 'var(--text-secondary)', padding: '2px 6px', borderRadius: 4,
@@ -131,13 +246,28 @@ export default function App() {
             loading={clusterLoading}
           />
           <div style={{ borderTop: '1px solid var(--border)' }} />
-          <ClusterSettings onApply={handleClusterParamsApply} loading={clusterLoading} />
+          <ClusterSettings
+            onApply={handleClusterParamsApply}
+            loading={clusterLoading}
+            settings={clusterSettings}
+            onSettingsChange={setClusterSettings}
+          />
+          <div style={{ borderTop: '1px solid var(--border)' }} />
+          <KeywordSettings
+            onApply={handleKeywordParamsApply}
+            loading={clusterLoading}
+            settings={keywordSettings}
+            onSettingsChange={setKeywordSettings}
+          />
           <div style={{ borderTop: '1px solid var(--border)' }} />
           <FilterPanel
             onFilterChange={handleFilterChange}
             onKeywordSearch={handleKeywordSearch}
             keywordSearchLoading={keywordSearchLoading}
             jobSource={jobSource}
+            availableLabels={allLabels}
+            selectedLabels={labelFilter}
+            onLabelFilterChange={setLabelFilter}
           />
         </aside>
 
@@ -197,26 +327,89 @@ export default function App() {
                 data={clusterData}
                 aspect={currentAspect}
                 onPointClick={handlePointClick}
-                highlightedJobs={highlightedJobs}
+                onSelectionChange={handleSelectionChange}
+                selectedJobIds={selectedJobIds}
                 filterJobIds={filterJobIds}
                 filterActive={keywordSearchActive && clusterFilterEnabled}
               />
             ) : (
               <JobTable
-                jobs={jobs}
+                jobs={filteredJobs}
                 onJobSelect={handleJobSelect}
-                selectedJobId={selectedJobId}
+                onSelectionChange={handleSelectionChange}
+                selectedJobIds={selectedJobIds}
+                jobLabels={jobLabels}
               />
             )}
           </div>
+
+          {/* Selection info bar */}
+          {selectedJobIds.size > 0 && (
+            <div style={{
+              padding: '6px 16px',
+              borderTop: '1px solid var(--border)',
+              background: 'var(--bg-secondary)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              fontSize: 12,
+            }}>
+              <span style={{ color: 'var(--text-secondary)' }}>
+                {selectedJobIds.size} job{selectedJobIds.size > 1 ? 's' : ''} selected
+              </span>
+              <button
+                onClick={() => setLabelDialogOpen(true)}
+                style={{
+                  padding: '3px 8px',
+                  background: 'var(--accent)',
+                  border: 'none',
+                  borderRadius: 4,
+                  color: 'white',
+                  cursor: 'pointer',
+                  fontSize: 11,
+                }}
+              >
+                Label (L)
+              </button>
+              <button
+                onClick={() => setSelectedJobIds(new Set())}
+                style={{
+                  padding: '3px 8px',
+                  background: 'transparent',
+                  border: '1px solid var(--border)',
+                  borderRadius: 4,
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  fontSize: 11,
+                }}
+              >
+                Clear
+              </button>
+            </div>
+          )}
 
           {/* Job detail panel */}
           <JobDetail jobId={selectedJobId} onClose={handleCloseDetail} />
         </main>
 
+        {/* Label dialog */}
+        <LabelDialog
+          isOpen={labelDialogOpen}
+          onClose={() => setLabelDialogOpen(false)}
+          selectedJobIds={selectedJobIds}
+          existingLabels={allLabels}
+          jobLabels={jobLabels}
+          onApplyLabel={handleApplyLabel}
+          onRemoveLabel={handleRemoveLabel}
+        />
+
         {/* Right chat panel */}
         <aside style={{ width: 340 }}>
-          <ChatPanel onSetJobs={handleAgentSetJobs} />
+          <ChatPanel
+            onSetJobs={handleAgentSetJobs}
+            selectedJobIds={selectedJobIds}
+            currentAspect={currentAspect}
+          />
         </aside>
       </div>
     </div>

@@ -53,6 +53,10 @@ async def chat_websocket(websocket: WebSocket):
             if not content:
                 continue
 
+            # Extract context (selected jobs, filters, etc.)
+            context = msg.get("context", {})
+            selected_job_ids = context.get("selectedJobIds", [])
+
             # Initialize coordinator lazily
             if coordinator is None:
                 try:
@@ -83,6 +87,7 @@ async def chat_websocket(websocket: WebSocket):
                 return coordinator.handle(
                     content,
                     on_tool_call=on_tool_call,
+                    selected_job_ids=selected_job_ids,
                 )
 
             try:

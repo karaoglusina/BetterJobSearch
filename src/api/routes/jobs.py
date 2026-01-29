@@ -7,6 +7,8 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
+from ...nlp.section_detector import detect_sections_structural
+
 router = APIRouter(tags=["jobs"])
 
 
@@ -177,6 +179,19 @@ async def get_job(request: Request, job_id: str) -> Dict[str, Any]:
 
     sorted_chunks = sorted(chunks, key=lambda c: c.get("order", 0))
     meta = sorted_chunks[0].get("meta", {})
+    full_text = _remove_chunk_overlap([c.get("text", "") for c in sorted_chunks])
+
+    # Parse sections using structural detection
+    parsed_sections = detect_sections_structural(full_text)
+    structured_sections = [
+        {
+            "name": s.name or "intro",
+            "raw_name": s.raw_name,
+            "text": s.text,
+        }
+        for s in parsed_sections
+        if s.text.strip()
+    ]
 
     return {
         "job_id": job_id,
@@ -190,7 +205,8 @@ async def get_job(request: Request, job_id: str) -> Dict[str, Any]:
         "salary": meta.get("salary"),
         "n_chunks": len(sorted_chunks),
         "sections": list(set(c.get("section", "") for c in sorted_chunks if c.get("section"))),
-        "full_text": _remove_chunk_overlap([c.get("text", "") for c in sorted_chunks]),
+        "parsed_sections": structured_sections,
+        "full_text": full_text,
         "chunks": [
             {
                 "chunk_id": c.get("chunk_id_v2", c.get("chunk_id", "")),
