@@ -68,7 +68,9 @@ warnings.filterwarnings("ignore", category=MarkupResemblesLocatorWarning)
 faiss.omp_set_num_threads(1)
 
 # --- Paths ---
-ARTIFACT_DIR = Path(__file__).parent.parent / "artifacts"
+# Use configurable ARTIFACTS_DIR from config, with fallback to default
+from .config import ARTIFACTS_DIR as _CONFIG_ARTIFACTS_DIR
+ARTIFACT_DIR = _CONFIG_ARTIFACTS_DIR
 CHUNKS_PATH = ARTIFACT_DIR / "chunks.jsonl"
 FAISS_PATH = ARTIFACT_DIR / "faiss.index"
 BM25_PATH = ARTIFACT_DIR / "bm25.pkl"

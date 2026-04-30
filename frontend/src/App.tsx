@@ -21,7 +21,16 @@ export default function App() {
     keywordSearch, keywordSearchLoading, keywordSearchActive,
     jobSource, setJobsFromExternal,
   } = useJobs();
-  const { clusterData, currentAspect, loading: clusterLoading, fetchClusters, clusterByConcept } = useClusters();
+  const {
+    clusterData,
+    polygons: clusterPolygons,
+    atlasLabels,
+    palette: clusterPalette,
+    currentAspect,
+    loading: clusterLoading,
+    fetchClusters,
+    clusterByConcept,
+  } = useClusters();
   const { jobLabels, allLabels, addLabel, removeLabel } = useLabels();
   const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
   const [view, setView] = useState<View>('scatter');
@@ -325,6 +334,9 @@ export default function App() {
             {view === 'scatter' ? (
               <ScatterPlot
                 data={clusterData}
+                polygons={clusterPolygons}
+                atlasLabels={atlasLabels}
+                palette={clusterPalette}
                 aspect={currentAspect}
                 onPointClick={handlePointClick}
                 onSelectionChange={handleSelectionChange}

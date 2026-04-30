@@ -35,6 +35,40 @@ export interface ClusterPoint {
   cluster_keywords?: string[];
 }
 
+export interface ClusterPolygon {
+  cluster_id: number;
+  path: [number, number][];
+}
+
+export interface ClusterLabel {
+  text: string;
+  x: number;
+  y: number;
+  level: number;
+  priority: number;
+  cluster_id: number;
+  sub_id?: number;
+}
+
+export interface ClusterResponse {
+  aspect: string;
+  n_jobs: number;
+  data: ClusterPoint[];
+  polygons?: ClusterPolygon[];
+  labels?: ClusterLabel[];
+  palette?: Record<string, string>;
+}
+
+export interface ConceptClusterResponse {
+  concept: string;
+  n_jobs: number;
+  n_clusters: number;
+  data: ClusterPoint[];
+  polygons?: ClusterPolygon[];
+  labels?: ClusterLabel[];
+  palette?: Record<string, string>;
+}
+
 export interface HealthResponse {
   status: string;
   artifacts_loaded: boolean;
@@ -112,11 +146,11 @@ export const api = {
     if (params?.effect_size_min !== undefined) searchParams.set('effect_size_min', String(params.effect_size_min));
     if (params?.effect_size_max !== undefined) searchParams.set('effect_size_max', String(params.effect_size_max));
     const qs = searchParams.toString();
-    return fetchJson<{ aspect: string; n_jobs: number; data: ClusterPoint[] }>(`/clusters/${aspect}${qs ? `?${qs}` : ''}`);
+    return fetchJson<ClusterResponse>(`/clusters/${aspect}${qs ? `?${qs}` : ''}`);
   },
 
   clusterByConcept: (concept: string) =>
-    fetchJson<{ concept: string; n_jobs: number; n_clusters: number; data: ClusterPoint[] }>('/clusters/concept', {
+    fetchJson<ConceptClusterResponse>('/clusters/concept', {
       method: 'POST',
       body: JSON.stringify({ concept }),
     }),

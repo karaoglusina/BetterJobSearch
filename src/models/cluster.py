@@ -17,6 +17,29 @@ class ClusterInfo(BaseModel):
     sample_titles: List[str] = Field(default_factory=list)
 
 
+class ClusterPolygon(BaseModel):
+    """Concave-hull polygon ('continent') for a single cluster."""
+
+    cluster_id: int
+    path: List[List[float]] = Field(default_factory=list)
+
+
+class ClusterLabel(BaseModel):
+    """A topic label placed on the scatter map.
+
+    level=0 is one per top cluster at its centroid; level=1 is a sub-topic
+    placed at a sub-cluster centroid (only shown when zoomed in).
+    """
+
+    text: str
+    x: float
+    y: float
+    level: int = 0
+    priority: float = 0.0
+    cluster_id: int
+    sub_id: int = -1
+
+
 class ClusterResult(BaseModel):
     """Full clustering result for an aspect or default projection."""
 
@@ -29,6 +52,10 @@ class ClusterResult(BaseModel):
     y: List[float] = Field(default_factory=list)
     cluster_ids: List[int] = Field(default_factory=list)
     noise_count: int = 0  # HDBSCAN noise points (label=-1)
+    # Atlas-style visualization layers
+    polygons: List[ClusterPolygon] = Field(default_factory=list)
+    labels: List[ClusterLabel] = Field(default_factory=list)
+    palette: Dict[str, str] = Field(default_factory=dict)
 
 
 class AspectDistribution(BaseModel):

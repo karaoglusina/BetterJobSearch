@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, ClusterPoint } from '../api/client';
+import { api, ClusterPoint, ClusterPolygon, ClusterLabel } from '../api/client';
 
 export interface ClusterParams {
   n_neighbors?: number;
@@ -15,6 +15,9 @@ export interface ClusterParams {
 
 export function useClusters() {
   const [clusterData, setClusterData] = useState<ClusterPoint[]>([]);
+  const [polygons, setPolygons] = useState<ClusterPolygon[]>([]);
+  const [atlasLabels, setAtlasLabels] = useState<ClusterLabel[]>([]);
+  const [palette, setPalette] = useState<Record<string, string>>({});
   const [currentAspect, setCurrentAspect] = useState('default');
   const [clusterParams, setClusterParams] = useState<ClusterParams>({});
   const [loading, setLoading] = useState(false);
@@ -33,6 +36,9 @@ export function useClusters() {
       const data = await api.getClusters(aspect, params);
       if (gen === requestGen.current) {
         setClusterData(data.data);
+        setPolygons(data.polygons ?? []);
+        setAtlasLabels(data.labels ?? []);
+        setPalette(data.palette ?? {});
       }
     } catch (e) {
       if (gen === requestGen.current) {
@@ -62,6 +68,9 @@ export function useClusters() {
       const data = await api.clusterByConcept(concept);
       if (gen === requestGen.current) {
         setClusterData(data.data);
+        setPolygons(data.polygons ?? []);
+        setAtlasLabels(data.labels ?? []);
+        setPalette(data.palette ?? {});
       }
     } catch (e) {
       if (gen === requestGen.current) {
@@ -74,5 +83,16 @@ export function useClusters() {
     }
   }, []);
 
-  return { clusterData, currentAspect, clusterParams, loading, error, fetchClusters, clusterByConcept };
+  return {
+    clusterData,
+    polygons,
+    atlasLabels,
+    palette,
+    currentAspect,
+    clusterParams,
+    loading,
+    error,
+    fetchClusters,
+    clusterByConcept,
+  };
 }

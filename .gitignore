@@ -52,6 +52,16 @@ data/offline_*.json*
 data/*.parquet
 data/job_group_embeddings.parquet
 
+# Keep private/local-only material under meta/local
+artifacts_ace/
+artifacts_large/
+artifacts_small/
+data/ace_jobs.json
+data/jobs_small.json
+data/mi_scores.csv
+scripts/convert_ace_markdown.py
+.claude/settings.local.json
+
 meta/
 
 # ===================

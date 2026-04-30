@@ -109,7 +109,8 @@ def _generate_cluster_labels(
     tfidf_min_df: float = 0.0,
     tfidf_max_df: float = 1.0,
     meaningful_phrases: Optional[List[str]] = None,
-) -> tuple[Dict[int, str], Dict[int, List[str]]]:
+    return_docs: bool = False,
+) -> tuple[Dict[int, str], Dict[int, List[str]], Dict[int, List[str]]]:
     """Generate descriptive cluster labels using c-TF-IDF keywords.
 
     Args:
@@ -123,9 +124,12 @@ def _generate_cluster_labels(
         meaningful_phrases: Optional whitelist of domain-specific phrases.
 
     Returns:
-        Tuple of (label_map, keywords_map) where:
+        Tuple of (label_map, keywords_map, docs_per_cluster) where:
         - label_map: cluster_id -> short label (3 keywords)
         - keywords_map: cluster_id -> full keyword list (10 keywords)
+        - docs_per_cluster: cluster_id -> list of short doc strings (one per job, in
+          the same order as job_ids). Returned as-is so downstream hierarchical
+          labeling can reuse it without recomputing.
     """
     from ...clustering_v2.labeler import compute_ctfidf
 
@@ -143,7 +147,7 @@ def _generate_cluster_labels(
         titles_per_cluster.setdefault(cid, []).append(titles[i])
 
     if not docs_per_cluster:
-        return {}, {}
+        return {}, {}, {}
 
     try:
         keywords = compute_ctfidf(
@@ -157,10 +161,63 @@ def _generate_cluster_labels(
             cid: ", ".join(kws[:3]) if kws else f"Cluster {cid}"
             for cid, kws in keywords.items()
         }
-        return label_map, keywords
+        return label_map, keywords, docs_per_cluster
     except Exception:
         label_map = {int(l): f"Cluster {l}" for l in set(labels) if l >= 0}
-        return label_map, {}
+        return label_map, {}, docs_per_cluster
+
+
+def _build_atlas_layers(
+    *,
+    x: np.ndarray,
+    y: np.ndarray,
+    cluster_ids: np.ndarray,
+    level0_labels: Dict[int, str],
+    docs_per_cluster: Dict[int, List[str]],
+    meaningful_phrases: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """Compute polygons, hierarchical labels and a Glasbey palette for the scatter.
+
+    All three layers are derived from the existing 2D coordinates and HDBSCAN
+    labels; failures in any one layer are isolated and leave the others intact.
+    """
+    from ...clustering_v2.hulls import compute_cluster_hulls
+    from ...clustering_v2.hierarchy import build_hierarchical_labels
+    from ...clustering_v2.label_layout import (
+        compute_plot_spans,
+        resolve_label_overlaps,
+    )
+    from ...clustering_v2.palette import build_palette
+
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    cluster_ids = np.asarray(cluster_ids)
+
+    try:
+        polygons = compute_cluster_hulls(x, y, cluster_ids)
+    except Exception:
+        polygons = []
+
+    try:
+        raw_labels = build_hierarchical_labels(
+            x=x,
+            y=y,
+            cluster_ids=cluster_ids,
+            docs_per_cluster=docs_per_cluster,
+            level0_labels=level0_labels,
+            meaningful_phrases=meaningful_phrases,
+        )
+        span_x, span_y = compute_plot_spans(x, y)
+        labels_out = resolve_label_overlaps(raw_labels, span_x=span_x, span_y=span_y)
+    except Exception:
+        labels_out = []
+
+    try:
+        palette = build_palette(cluster_ids.tolist())
+    except Exception:
+        palette = {}
+
+    return {"polygons": polygons, "labels": labels_out, "palette": palette}
 
 
 def _compute_clusters(
@@ -203,10 +260,36 @@ def _compute_clusters(
         for r in records:
             r.setdefault("title", "")
             r.setdefault("company", "")
+
+        atlas_sidecar = cache.load_atlas_layers(cache_key)
+        if atlas_sidecar is None:
+            # Backfill on the fly for older cached entries.
+            df = cached
+            cluster_ids_arr = np.asarray(df["cluster_id"].tolist())
+            label_map: Dict[int, str] = {}
+            for cid, lbl in zip(df["cluster_id"].tolist(), df["cluster_label"].tolist()):
+                cid_i = int(cid)
+                if cid_i >= 0 and cid_i not in label_map:
+                    label_map[cid_i] = str(lbl)
+            atlas_sidecar = _build_atlas_layers(
+                x=np.asarray(df["x"].tolist()),
+                y=np.asarray(df["y"].tolist()),
+                cluster_ids=cluster_ids_arr,
+                level0_labels=label_map,
+                docs_per_cluster={},
+            )
+            try:
+                cache.save_atlas_layers(cache_key, atlas_sidecar)
+            except Exception:
+                pass
+
         return {
             "aspect": aspect,
             "n_jobs": len(cached),
             "data": records,
+            "polygons": atlas_sidecar.get("polygons", []),
+            "labels": atlas_sidecar.get("labels", []),
+            "palette": atlas_sidecar.get("palette", {}),
         }
 
     # Group chunks into jobs
@@ -238,15 +321,25 @@ def _compute_clusters(
     labels = cluster_hdbscan(coords, min_cluster_size=actual_min_cluster)
 
     # Generate descriptive labels using c-TF-IDF
-    label_map, keywords_map = _generate_cluster_labels(
+    label_map, keywords_map, docs_per_cluster = _generate_cluster_labels(
         chunks, job_map, job_ids, labels, titles,
         tfidf_min_df=tfidf_min_df, tfidf_max_df=tfidf_max_df,
+        meaningful_phrases=meaningful_phrases,
+    )
+
+    atlas_layers = _build_atlas_layers(
+        x=coords[:, 0],
+        y=coords[:, 1],
+        cluster_ids=labels,
+        level0_labels=label_map,
+        docs_per_cluster=docs_per_cluster,
         meaningful_phrases=meaningful_phrases,
     )
 
     cache.save(
         cache_key, job_ids, coords[:, 0].tolist(), coords[:, 1].tolist(),
         labels.tolist(), label_map, titles=titles, companies=companies,
+        atlas_layers=atlas_layers,
     )
 
     data = [
@@ -263,7 +356,14 @@ def _compute_clusters(
         for i in range(len(job_ids))
     ]
 
-    return {"aspect": aspect, "n_jobs": len(job_ids), "data": data}
+    return {
+        "aspect": aspect,
+        "n_jobs": len(job_ids),
+        "data": data,
+        "polygons": atlas_layers["polygons"],
+        "labels": atlas_layers["labels"],
+        "palette": atlas_layers["palette"],
+    }
 
 
 def _compute_concept_clusters(chunks: List[Dict[str, Any]], faiss_index, concept: str) -> Dict[str, Any]:
@@ -289,7 +389,17 @@ def _compute_concept_clusters(chunks: List[Dict[str, Any]], faiss_index, concept
 
     # Generate descriptive labels for concept clusters
     cluster_ids_arr = np.array(result.cluster_ids)
-    label_map, keywords_map = _generate_cluster_labels(chunks, job_map, job_ids, cluster_ids_arr, titles)
+    label_map, keywords_map, docs_per_cluster = _generate_cluster_labels(
+        chunks, job_map, job_ids, cluster_ids_arr, titles
+    )
+
+    atlas_layers = _build_atlas_layers(
+        x=np.asarray(result.x),
+        y=np.asarray(result.y),
+        cluster_ids=cluster_ids_arr,
+        level0_labels=label_map,
+        docs_per_cluster=docs_per_cluster,
+    )
 
     data = [
         {
@@ -310,6 +420,9 @@ def _compute_concept_clusters(chunks: List[Dict[str, Any]], faiss_index, concept
         "n_jobs": len(job_ids),
         "n_clusters": result.n_clusters,
         "data": data,
+        "polygons": atlas_layers["polygons"],
+        "labels": atlas_layers["labels"],
+        "palette": atlas_layers["palette"],
     }
 
 

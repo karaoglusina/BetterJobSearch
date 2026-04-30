@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -25,6 +26,11 @@ class ClusterCache:
     def _path(self, aspect: str) -> Path:
         safe_name = aspect.replace("/", "_").replace(" ", "_").lower()
         return self.cache_dir / f"clusters_{safe_name}.parquet"
+
+    def _atlas_path(self, aspect: str) -> Path:
+        """Sidecar JSON with polygons / hierarchical labels / palette."""
+        safe_name = aspect.replace("/", "_").replace(" ", "_").lower()
+        return self.cache_dir / f"clusters_{safe_name}.atlas.json"
 
     def has(self, aspect: str) -> bool:
         """Check if cached projection exists for an aspect."""
@@ -53,6 +59,7 @@ class ClusterCache:
         cluster_labels: Optional[Dict[int, str]] = None,
         titles: Optional[List[str]] = None,
         companies: Optional[List[str]] = None,
+        atlas_layers: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Save projection to parquet.
 
@@ -81,6 +88,34 @@ class ClusterCache:
         df = pd.DataFrame(data)
         df.to_parquet(self._path(aspect), index=False)
 
+        if atlas_layers is not None:
+            try:
+                self.save_atlas_layers(aspect, atlas_layers)
+            except Exception:
+                pass
+
+    def save_atlas_layers(self, aspect: str, atlas_layers: Dict[str, Any]) -> None:
+        """Persist polygons/labels/palette sidecar for an aspect.
+
+        Payload shape matches what the API returns so loading is a no-op.
+        """
+        payload = {
+            "polygons": atlas_layers.get("polygons", []),
+            "labels": atlas_layers.get("labels", []),
+            "palette": atlas_layers.get("palette", {}),
+        }
+        self._atlas_path(aspect).write_text(json.dumps(payload), encoding="utf-8")
+
+    def load_atlas_layers(self, aspect: str) -> Optional[Dict[str, Any]]:
+        """Load polygons/labels/palette sidecar; returns None if missing/corrupt."""
+        path = self._atlas_path(aspect)
+        if not path.exists():
+            return None
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return None
+
     def invalidate(self, aspect: Optional[str] = None) -> None:
         """Remove cached projections.
 
@@ -88,11 +123,13 @@ class ClusterCache:
             aspect: Specific aspect to invalidate, or None for all.
         """
         if aspect:
-            path = self._path(aspect)
-            if path.exists():
-                path.unlink()
+            for path in (self._path(aspect), self._atlas_path(aspect)):
+                if path.exists():
+                    path.unlink()
         else:
             for f in self.cache_dir.glob("clusters_*.parquet"):
+                f.unlink()
+            for f in self.cache_dir.glob("clusters_*.atlas.json"):
                 f.unlink()
 
     def list_cached(self) -> List[str]:

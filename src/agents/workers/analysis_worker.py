@@ -59,10 +59,10 @@ class AnalysisWorker:
             user_msg = f"{query}\n\nContext:\n{context}"
 
         # Create a tool executor that passes selected_job_ids to the get_selected_jobs tool
-        def tool_executor(tool_name: str, **kwargs):
+        def tool_executor(tool_name: str, arguments: Dict[str, Any]):
             if tool_name == "get_selected_jobs" and selected_job_ids:
-                kwargs["_selected_job_ids"] = selected_job_ids
-            return self.registry.execute(tool_name, **kwargs)
+                arguments["_selected_job_ids"] = selected_job_ids
+            return self.registry.execute(tool_name, arguments)
 
         return react_loop(
             system_prompt=SYSTEM_PROMPT,

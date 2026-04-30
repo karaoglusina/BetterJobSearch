@@ -62,6 +62,30 @@ This creates `artifacts/faiss.index`, `artifacts/bm25.pkl`, `artifacts/chunks.js
 
 ### 2. Start the API + React UI
 
+If you use Cursor/VS Code, you can run both servers with one click:
+
+1. Open Command Palette (`Cmd+Shift+P`)
+2. Run `Tasks: Run Task`
+3. Select `Run BetterJobSearch`
+
+This uses `.vscode/tasks.json` and starts backend + frontend in parallel.
+
+If you prefer macOS only (no IDE task runner), use the included launcher:
+
+1. In Finder, open the project folder
+2. Double-click `Run BetterJobSearch.command`
+
+This runs `scripts/run_project.sh`, opens Terminal, and starts backend + frontend in separate Terminal sessions.
+
+If you use iTerm2, use the iTerm2 launcher:
+
+1. In Finder, open the project folder
+2. Double-click `Run BetterJobSearch iTerm2.command`
+
+This runs `scripts/run_project_iterm2.sh` and starts backend + frontend in separate iTerm2 tabs.
+
+Both launcher scripts resolve the project path dynamically from the script location, so they do not require hardcoded absolute paths.
+
 The application consists of two separate servers that need to run simultaneously:
 
 **Terminal 1: FastAPI Backend (Port 8000)**

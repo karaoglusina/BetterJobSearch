@@ -23,11 +23,12 @@ Example usage:
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .config import DATA_DIR, DEFAULT_SAMPLE_DATA
+from .config import DATA_DIR, DEFAULT_SAMPLE_DATA, set_artifacts_dir
 
 
 def load_jobs(path: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -71,6 +72,7 @@ def build_index(
     extract_aspects: bool = True,
     extract_keywords: bool = False,
     enable_llm_aspects: bool = False,
+    artifacts_dir: Optional[str] = None,
 ) -> None:
     """Build RAG indexes (FAISS + BM25) from job data with NLP pipeline.
 
@@ -80,12 +82,17 @@ def build_index(
         extract_aspects: Run deterministic aspect extraction on chunks.
         extract_keywords: Run keyword extraction (slower).
         enable_llm_aspects: Run LLM-based aspect extraction (domain, culture).
+        artifacts_dir: Directory to save artifacts (default: artifacts/).
 
     Creates:
         - artifacts/chunks.jsonl
         - artifacts/faiss.index
         - artifacts/bm25.pkl
     """
+    # Set artifacts directory if provided (must be before importing rag)
+    if artifacts_dir:
+        set_artifacts_dir(artifacts_dir)
+    
     from . import rag
 
     if jobs is None:
@@ -200,6 +207,7 @@ def search(
     query: str,
     k: int = 8,
     alpha: float = 0.55,
+    artifacts_dir: Optional[str] = None,
 ) -> None:
     """Search for jobs matching a query.
 
@@ -207,7 +215,12 @@ def search(
         query: Search query string
         k: Number of results to return
         alpha: Hybrid search weight (1.0 = vectors only, 0.0 = BM25 only)
+        artifacts_dir: Directory to load artifacts from (default: artifacts/).
     """
+    # Set artifacts directory if provided (must be before importing rag)
+    if artifacts_dir:
+        set_artifacts_dir(artifacts_dir)
+    
     from . import rag
 
     if not rag.is_loaded():
@@ -233,13 +246,17 @@ def search(
         print()
 
 
-def serve(port: int = 8000, reload: bool = False) -> None:
+def serve(port: int = 8000, reload: bool = False, artifacts_dir: Optional[str] = None) -> None:
     """Start the FastAPI backend server.
 
     Args:
         port: Port to run on
         reload: Enable auto-reload for development
+        artifacts_dir: Directory to load artifacts from (default: artifacts/).
     """
+    # Set artifacts directory if provided (must be before importing API modules)
+    if artifacts_dir:
+        set_artifacts_dir(artifacts_dir)
     try:
         import uvicorn
     except ImportError:
@@ -256,7 +273,7 @@ def serve(port: int = 8000, reload: bool = False) -> None:
     )
 
 
-def chat(model: str = "gpt-4o-mini") -> None:
+def chat(model: str = "gpt-4o-mini", artifacts_dir: Optional[str] = None) -> None:
     """Start an interactive agentic chat session.
 
     Uses the multi-agent system with tool-based context expansion.
@@ -264,7 +281,12 @@ def chat(model: str = "gpt-4o-mini") -> None:
 
     Args:
         model: OpenAI model to use
+        artifacts_dir: Directory to load artifacts from (default: artifacts/).
     """
+    # Set artifacts directory if provided (must be before importing modules)
+    if artifacts_dir:
+        set_artifacts_dir(artifacts_dir)
+    
     import os
 
     if os.environ.get("OPENAI_API_KEY"):
@@ -354,21 +376,37 @@ Examples:
         "--llm-aspects", action="store_true",
         help="Enable LLM-based aspect extraction (domain, culture)",
     )
+    build_parser.add_argument(
+        "--artifacts-dir", type=str, default=None,
+        help="Directory to save artifacts (default: artifacts/). Can also use ARTIFACTS_DIR env var.",
+    )
 
     # Search command
     search_parser = subparsers.add_parser("search", help="Search for jobs")
     search_parser.add_argument("query", type=str, help="Search query")
     search_parser.add_argument("--k", "-k", type=int, default=8, help="Number of results (default: 8)")
     search_parser.add_argument("--alpha", "-a", type=float, default=0.55, help="Hybrid search weight (default: 0.55)")
+    search_parser.add_argument(
+        "--artifacts-dir", type=str, default=None,
+        help="Directory to load artifacts from (default: artifacts/). Can also use ARTIFACTS_DIR env var.",
+    )
 
     # FastAPI serve command
     serve_parser = subparsers.add_parser("serve", help="Start FastAPI backend (for React UI)")
     serve_parser.add_argument("--port", "-p", type=int, default=8000, help="Port (default: 8000)")
     serve_parser.add_argument("--reload", action="store_true", help="Enable auto-reload")
+    serve_parser.add_argument(
+        "--artifacts-dir", type=str, default=None,
+        help="Directory to load artifacts from (default: artifacts/). Can also use ARTIFACTS_DIR env var.",
+    )
 
     # Chat command
     chat_parser = subparsers.add_parser("chat", help="Interactive agentic chat")
     chat_parser.add_argument("--model", "-m", type=str, default="gpt-4o-mini", help="OpenAI model (default: gpt-4o-mini)")
+    chat_parser.add_argument(
+        "--artifacts-dir", type=str, default=None,
+        help="Directory to load artifacts from (default: artifacts/). Can also use ARTIFACTS_DIR env var.",
+    )
 
     args = parser.parse_args()
 
@@ -377,19 +415,23 @@ Examples:
         sys.exit(0)
 
     try:
+        # Get artifacts_dir from args or environment variable
+        artifacts_dir = getattr(args, "artifacts_dir", None) or os.getenv("ARTIFACTS_DIR")
+        
         if args.command == "build":
             build_index(
                 data_path=args.data,
                 extract_aspects=not args.no_aspects,
                 extract_keywords=args.keywords,
                 enable_llm_aspects=args.llm_aspects,
+                artifacts_dir=artifacts_dir,
             )
         elif args.command == "search":
-            search(args.query, k=args.k, alpha=args.alpha)
+            search(args.query, k=args.k, alpha=args.alpha, artifacts_dir=artifacts_dir)
         elif args.command == "serve":
-            serve(port=args.port, reload=args.reload)
+            serve(port=args.port, reload=args.reload, artifacts_dir=artifacts_dir)
         elif args.command == "chat":
-            chat(model=args.model)
+            chat(model=args.model, artifacts_dir=artifacts_dir)
     except KeyboardInterrupt:
         print("\nInterrupted.")
         sys.exit(0)
