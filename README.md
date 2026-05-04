@@ -2,6 +2,14 @@
 
 Job market analysis toolkit with hybrid RAG search, deterministic NLP aspect extraction, UMAP/HDBSCAN clustering, a multi-agent system, and a React + FastAPI interface.
 
+If you need a data source, you can use output from
+[sina-linkedin-scraper](https://github.com/karaoglusina/sina-linkedin-scraper).
+BetterJobSearch accepts that project's canonical `jobs.json` directly:
+
+```bash
+python -m src.pipeline build --data path/to/jobs.json
+```
+
 ![BetterJobSearch Interface](bjst.png)
 
 ## Features
@@ -122,7 +130,7 @@ This starts the React development server on `http://localhost:5173` that:
 
 **Access the Application:**
 
-Open http://localhost:5173 in your browser. The React frontend will automatically communicate with the FastAPI backend running on port 8000.
+Open [http://localhost:5173](http://localhost:5173) in your browser. The React frontend will automatically communicate with the FastAPI backend running on port 8000.
 
 The frontend makes HTTP requests to the backend API, and the backend serves the data and handles search/clustering operations.
 
@@ -168,7 +176,22 @@ The system expects job data as a JSON file. Each job document:
 }
 ```
 
-The JSON file can be a list `[{job1}, {job2}]` or a dict `{"jobs": [{job1}, {job2}]}`.
+Input must be the canonical scraper store format:
+
+```json
+{
+  "version": 1,
+  "updatedAt": "2026-04-30T20:00:00Z",
+  "jobs": {
+    "4359400961": { "...job fields..." }
+  },
+  "companies": {
+    "some-company-slug": { "...company fields..." }
+  }
+}
+```
+
+Only scraped/usable entries from `jobs` are indexed.
 
 ## Configuration
 
@@ -178,17 +201,20 @@ Copy `.env.example` to `.env`:
 cp .env.example .env
 ```
 
+
 | Variable         | Required         | Purpose                                                   |
 | ---------------- | ---------------- | --------------------------------------------------------- |
 | `OPENAI_API_KEY` | For LLM features | Agentic chat, domain/culture extraction, cluster labeling |
 | `GOOGLE_API_KEY` | No               | Company logo search fallback                              |
 | `GOOGLE_CSE_ID`  | No               | Custom search engine ID for logos                         |
 
+
 ## Architecture
 
 ### NLP Pipeline (`src/nlp/`)
 
 Deterministic aspect extraction runs at index time:
+
 
 | Aspect        | Method              | Example Output                            |
 | ------------- | ------------------- | ----------------------------------------- |
@@ -201,6 +227,7 @@ Deterministic aspect extraction runs at index time:
 | Benefits      | Keyword matching    | `["pension", "equity", "flexible hours"]` |
 | Domain        | LLM (optional)      | `"FinTech"`                               |
 | Culture       | LLM (optional)      | `["innovative", "fast-paced"]`            |
+
 
 Entity normalization with rapidfuzz ensures `"JS"` / `"Javascript"` / `"JavaScript"` map to the same canonical form.
 
@@ -238,6 +265,7 @@ All agents use a shared ReAct loop (`src/agents/loop.py`) with OpenAI function c
 
 ### API (`src/api/`)
 
+
 | Method | Path                               | Description                             |
 | ------ | ---------------------------------- | --------------------------------------- |
 | `GET`  | `/api/jobs`                        | List jobs with filtering and pagination |
@@ -249,6 +277,7 @@ All agents use a shared ReAct loop (`src/agents/loop.py`) with OpenAI function c
 | `GET`  | `/api/aspects/{name}/distribution` | Value distribution for an aspect        |
 | `WS`   | `/api/chat`                        | WebSocket agentic chat                  |
 | `GET`  | `/api/health`                      | Health check                            |
+
 
 ### Frontend (`frontend/`)
 

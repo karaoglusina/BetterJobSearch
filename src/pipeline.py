@@ -31,6 +31,28 @@ from typing import Any, Dict, List, Optional
 from .config import DATA_DIR, DEFAULT_SAMPLE_DATA, set_artifacts_dir
 
 
+def _normalize_job_docs(data: Any) -> List[Dict[str, Any]]:
+    """Normalize canonical scraper store into a list of job documents.
+
+    Expected input shape:
+    - {"jobs": {job_id: doc, ...}}
+    """
+    if isinstance(data, dict) and "jobs" in data and isinstance(data["jobs"], dict):
+        # Canonical store entries can include discovered-but-not-scraped jobs.
+        # Keep only documents that are usable for indexing.
+        out: List[Dict[str, Any]] = []
+        for doc in data["jobs"].values():
+            if not isinstance(doc, dict):
+                continue
+            has_description = bool(doc.get("description"))
+            is_scraped = bool(doc.get("scraped"))
+            if is_scraped or has_description:
+                out.append(doc)
+        return out
+
+    raise ValueError("JSON must be canonical scraper store: {'jobs': {...}}")
+
+
 def load_jobs(path: Optional[str] = None) -> List[Dict[str, Any]]:
     """Load job data from a JSON file.
 
@@ -40,9 +62,8 @@ def load_jobs(path: Optional[str] = None) -> List[Dict[str, Any]]:
     Returns:
         List of job documents
 
-    The JSON can be either:
-    - A list of job documents directly
-    - A dict with a 'jobs' key containing the list
+    The JSON must be canonical scraper store format:
+    - A dict with a 'jobs' key containing an object keyed by job ID
     """
     json_path = Path(path) if path else DEFAULT_SAMPLE_DATA
 
@@ -53,13 +74,7 @@ def load_jobs(path: Optional[str] = None) -> List[Dict[str, Any]]:
     with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    # Handle both list and dict with 'jobs' key
-    if isinstance(data, list):
-        jobs = data
-    elif isinstance(data, dict) and "jobs" in data:
-        jobs = data["jobs"]
-    else:
-        raise ValueError("JSON must be a list of jobs or a dict with 'jobs' key")
+    jobs = _normalize_job_docs(data)
 
     print(f"Loaded {len(jobs)} jobs")
     return jobs

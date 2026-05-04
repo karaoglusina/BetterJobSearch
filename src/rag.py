@@ -785,13 +785,20 @@ if __name__ == "__main__":
         with open(json_path, "r", encoding="utf-8") as f:
             data = json.load(f)
 
-        # Handle both list and dict with 'jobs' key
-        if isinstance(data, list):
-            docs = data
-        elif isinstance(data, dict) and "jobs" in data:
-            docs = data["jobs"]
+        # Handle canonical {"jobs": {...}} only.
+        if isinstance(data, dict) and "jobs" in data and isinstance(data["jobs"], dict):
+            docs = []
+            for doc in data["jobs"].values():
+                if not isinstance(doc, dict):
+                    continue
+                has_description = bool(doc.get("description"))
+                is_scraped = bool(doc.get("scraped"))
+                if is_scraped or has_description:
+                    docs.append(doc)
         else:
-            print("Error: JSON must be a list of jobs or a dict with 'jobs' key")
+            print(
+                "Error: JSON must be canonical scraper store: {'jobs': {...}}"
+            )
             sys.exit(1)
 
         build_index(docs=docs)
